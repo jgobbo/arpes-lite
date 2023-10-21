@@ -76,9 +76,9 @@ class SPEEMEndstation(EndstationBase):
         phi = np.multiply(radial_angle, np.cos(theta))
         psi = np.multiply(radial_angle, np.sin(theta))
 
-        return np.stack((phi, psi, kinetic_energy))
+        return np.stack((phi, psi, kinetic_energy), axis=1)
 
-    def load(self, scan_desc: dict = None, **kwargs):
+    def load(self, scan_desc: dict, conversion_table:np.ndarray, **kwargs):
         """Loads a pickle file from the SPEEM DAQ.
 
         Params:
@@ -88,9 +88,6 @@ class SPEEMEndstation(EndstationBase):
         Returns:
             The loaded spectrum.
         """
-        if scan_desc is None:
-            warnings.warn("Attempting to make due without user associated metadata for the file")
-            raise TypeError("Expected a dictionary of metadata with the location of the file")
 
         metadata = copy.deepcopy(scan_desc)
 
@@ -100,39 +97,47 @@ class SPEEMEndstation(EndstationBase):
 
         with open(data_loc, "rb") as f:
             raw_counts = pickle.load(f)["detector-frame-data"].data
-        concatenate = kwargs.get("concatenate", True)
-        raw_counts = [np.concatenate(raw_counts)] if concatenate else raw_counts
+        # concatenate = kwargs.get("concatenate", True)
+        # raw_counts = [np.concatenate(raw_counts)] if concatenate else raw_counts
         # dataset_contents["raw_counts"] = raw_counts
 
-        timing_delay = (
-            kwargs.get("timing_delay", NOMINAL_TIMING_OFFSET) - NOMINAL_TIMING_OFFSET
-        )  # ns
-        energy_offset = kwargs.get("energy_offset", 0)  # eV
-        energy_scale = kwargs.get("energy_scale", 16)  # ns/eV
-
+        raw_counts:np.ndarray = np.concatenate(raw_counts) 
+        converted_counts = self.coordinate_conversion(raw_counts, conversion_table)
+        
         n_bins = kwargs.get("bins", 100)
-        datasets = []
-        for frame in raw_counts:
-            pruned_frame = self.prune_data(frame)
-            histogram, bins = np.histogramdd(pruned_frame, bins=n_bins)
+        histogram, bins = np.histogramdd(converted_counts, bins=n_bins)
+        coords = {"phi":bins[0],"psi":bins[1],"KE":bins[2]}
+        dataset_contents["raw"] = xr.DataArray(histogram, coords=coords, dims=tuple(coords.keys()))
 
-            dataset_contents["raw"] = xr.DataArray(
-                histogram,
-                coords={"phi": bins[0], "psi": bins[1], "KE": bins[2]},
-                # coords={
-                #     "x": np.linspace(-12, 12, bins),
-                #     "y": np.linspace(-12, 12, bins),
-                #     "Eb": np.linspace(
-                #         (timing_delay - 4095 * NS_PER_PIXEL) / energy_scale + energy_offset,
-                #         timing_delay / energy_scale + energy_offset,
-                #         bins,
-                #     ),
-                # },
-                dims=("x", "y", "Eb"),
-                # attrs=f["/PRIMARY"].attrs.items(),
-            )
+        # timing_delay = (
+        #     kwargs.get("timing_delay", NOMINAL_TIMING_OFFSET) - NOMINAL_TIMING_OFFSET
+        # )  # ns
+        # energy_offset = kwargs.get("energy_offset", 0)  # eV
+        # energy_scale = kwargs.get("energy_scale", 16)  # ns/eV
 
-            datasets.append(dataset_contents)
+        # datasets = []
+        # for frame in raw_counts:
+        #     pruned_frame = self.prune_data(frame)
+        #     histogram, bins = np.histogramdd(pruned_frame, bins=n_bins)
+        #     coords = {"phi": bins[0][1:], "psi": bins[1][1:], "KE": bins[2][1:]}
+
+        #     dataset_contents["raw"] = xr.DataArray(
+        #         histogram,
+        #         coords=coords,
+        #         # coords={
+        #         #     "x": np.linspace(-12, 12, bins),
+        #         #     "y": np.linspace(-12, 12, bins),
+        #         #     "Eb": np.linspace(
+        #         #         (timing_delay - 4095 * NS_PER_PIXEL) / energy_scale + energy_offset,
+        #         #         timing_delay / energy_scale + energy_offset,
+        #         #         bins,
+        #         #     ),
+        #         # },
+        #         dims=tuple(coords.keys()),
+        #         # attrs=f["/PRIMARY"].attrs.items(),
+        #     )
+
+        #     datasets.append(dataset_contents)
 
         provenance_from_file(
             dataset_contents["raw"],
@@ -143,9 +148,9 @@ class SPEEMEndstation(EndstationBase):
             },
         )
 
-        if concatenate:
-            return xr.Dataset(datasets[0], attrs=metadata)
-        return xr.Dataset(datasets, attrs=metadata)
+        # if concatenate:
+        #     return xr.Dataset(datasets[0], attrs=metadata)
+        return xr.Dataset(dataset_contents, attrs=metadata)
 
     @staticmethod
     def prune_data(data: np.ndarray):

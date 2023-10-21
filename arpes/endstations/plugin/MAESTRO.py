@@ -16,7 +16,9 @@ from arpes.endstations import (
 __all__ = ("MAESTROMicroARPESEndstation", "MAESTRONanoARPESEndstation")
 
 
-class MAESTROARPESEndstationBase(SynchrotronEndstation, HemisphericalEndstation, FITSEndstation):
+class MAESTROARPESEndstationBase(
+    SynchrotronEndstation, HemisphericalEndstation, FITSEndstation
+):
     """Common code for the MAESTRO ARPES endstations at the Advanced Light Source."""
 
     PRINCIPAL_NAME = None  # skip me
@@ -111,6 +113,7 @@ class MAESTROMicroARPESEndstation(MAESTROARPESEndstationBase):
         "SFBA_0": "phi_prebinning",
         "SFBE0": "eV_prebinning",
         "LWLVNM": "daq_type",
+        "spectrum-119": "spectrum",
     }
 
     RENAME_COORDS = {
@@ -139,6 +142,20 @@ class MAESTROMicroARPESEndstation(MAESTROARPESEndstationBase):
         "undulator_z": None,
         "undulator_polarization": None,
     }
+
+    def postprocess_final(self, data: xr.Dataset, scan_desc: dict = None):
+        data = super().postprocess_final(data, scan_desc)
+
+        if "phi" in data.coords:
+            del data.coords["phi"]
+
+        if "pixel" in data.coords:
+            data.coords["pixel"] = (0.181 / 200) * (
+                data.coords["pixel"] - data.coords["pixel"].mean()
+            )
+            return data.rename({"pixel": "phi"})
+
+        return data
 
 
 class MAESTRONanoARPESEndstation(MAESTROARPESEndstationBase):
@@ -309,7 +326,9 @@ class MAESTRONanoARPESEndstation(MAESTROARPESEndstationBase):
                 data = data.assign_coords(
                     **{
                         d_name: -c_short - c_long,
-                        scan_coord_name: -c_short if scan_coord_name == short else -c_long,
+                        scan_coord_name: -c_short
+                        if scan_coord_name == short
+                        else -c_long,
                     }
                 )
             else:
@@ -335,7 +354,9 @@ class MAESTRONanoARPESEndstation(MAESTROARPESEndstationBase):
             # serpentine axis always seems to be the first one, thankfully
             old_values = spectrum.values.copy()
 
-            mask = np.mod(np.array(range(len(spectrum.coords[spectrum.dims[0]]))), 2) == 1
+            mask = (
+                np.mod(np.array(range(len(spectrum.coords[spectrum.dims[0]]))), 2) == 1
+            )
             old_values[mask] = np.roll(old_values[mask, ::-1], 2, axis=1)
 
             spectrum.values = old_values
@@ -360,7 +381,9 @@ class MAESTRONanoARPESEndstation(MAESTROARPESEndstationBase):
         Additionally, we do some normalization of different scan modes offered on this beamline,
         like "serpentine" (x-y zigzag) scanning.
         """
-        data = data.rename({k: v for k, v in self.RENAME_COORDS.items() if k in data.coords.keys()})
+        data = data.rename(
+            {k: v for k, v in self.RENAME_COORDS.items() if k in data.coords.keys()}
+        )
         data = super().postprocess_final(data, scan_desc)
 
         # microns to mm
