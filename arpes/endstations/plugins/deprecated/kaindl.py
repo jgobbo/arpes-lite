@@ -55,7 +55,7 @@ def read_ai_file(path: Path) -> pd.DataFrame:
         lines = f.readlines()
 
     first_line_no = None
-    for (i, line) in enumerate(lines):
+    for i, line in enumerate(lines):
         if "\t" in line:
             first_line_no = i
             break
@@ -166,7 +166,9 @@ class KaindlEndstation(HemisphericalEndstation, SESEndstation):
             r"([a-zA-Z0-9\w+_]+_[0-9][0-9][0-9])\.pxt", Path(original_filename).name
         )
         all_filenames = find_kaindl_files_associated(Path(original_filename))
-        all_filenames = [os.path.join(f.parent, "{}_AI.txt".format(f.stem)) for f in all_filenames]
+        all_filenames = [
+            os.path.join(f.parent, "{}_AI.txt".format(f.stem)) for f in all_filenames
+        ]
 
         def load_attr_for_frame(filename, attr_name):
             # this is rereading which is not ideal but can be adjusted later
@@ -174,14 +176,20 @@ class KaindlEndstation(HemisphericalEndstation, SESEndstation):
             return np.mean(df[attr_name])
 
         def attach_attr(data, attr_name, as_name):
-            attributes = np.array([load_attr_for_frame(f, attr_name) for f in all_filenames])
+            attributes = np.array(
+                [load_attr_for_frame(f, attr_name) for f in all_filenames]
+            )
 
             if len(attributes) == 1:
                 data[as_name] = attributes[0]
             else:
-                non_spectrometer_dims = [d for d in data.spectrum.dims if d not in {"eV", "phi"}]
+                non_spectrometer_dims = [
+                    d for d in data.spectrum.dims if d not in {"eV", "phi"}
+                ]
                 non_spectrometer_coords = {
-                    c: v for c, v in data.spectrum.coords.items() if c in non_spectrometer_dims
+                    c: v
+                    for c, v in data.spectrum.coords.items()
+                    if c in non_spectrometer_dims
                 }
 
                 new_shape = [len(data.coords[d]) for d in non_spectrometer_dims]
@@ -204,7 +212,8 @@ class KaindlEndstation(HemisphericalEndstation, SESEndstation):
 
         if internal_match.groups():
             attrs_path = str(
-                Path(original_filename).parent / "{}_AI.txt".format(internal_match.groups()[0])
+                Path(original_filename).parent
+                / "{}_AI.txt".format(internal_match.groups()[0])
             )
 
             try:
@@ -231,6 +240,6 @@ class KaindlEndstation(HemisphericalEndstation, SESEndstation):
             l.coords["y"] = np.nan
             l.coords["z"] = np.nan
 
-        data = super().postprocess_final(data, scan_desc)
+        data = super().postprocess_scan(data, scan_desc)
 
         return data

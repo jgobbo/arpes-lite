@@ -55,7 +55,7 @@ class SPEEMEndstation(EndstationBase):
     """Provides data loading for the Lanzara group SPEEM."""
 
     PRINCIPAL_NAME = "ALG-SPEEM"
-    ALIASES = ["SPEEM", "ToF", "ARToF"]
+    ALIASES = ["SPEEM", "ToF", "PEEM-ToF"]
     _TOLERATED_EXTENSIONS = {".pickle"}
 
     def coordinate_conversion(
@@ -67,7 +67,10 @@ class SPEEMEndstation(EndstationBase):
 
         method = "cubic"
         kinetic_energy = griddata(
-            conversion_table[:, 0:2], conversion_table[:, 2], count_list[:, 2], method=method
+            conversion_table[:, 0:2],
+            conversion_table[:, 2],
+            count_list[:, 2],
+            method=method,
         )
         radial_angle = griddata(
             conversion_table[:, 0:2], conversion_table[:, 3], radius, method=method
@@ -78,7 +81,7 @@ class SPEEMEndstation(EndstationBase):
 
         return np.stack((phi, psi, kinetic_energy), axis=1)
 
-    def load(self, scan_desc: dict, conversion_table:np.ndarray, **kwargs):
+    def load(self, scan_desc: dict, conversion_table: np.ndarray, **kwargs):
         """Loads a pickle file from the SPEEM DAQ.
 
         Params:
@@ -101,13 +104,15 @@ class SPEEMEndstation(EndstationBase):
         # raw_counts = [np.concatenate(raw_counts)] if concatenate else raw_counts
         # dataset_contents["raw_counts"] = raw_counts
 
-        raw_counts:np.ndarray = np.concatenate(raw_counts) 
+        raw_counts: np.ndarray = np.concatenate(raw_counts)
         converted_counts = self.coordinate_conversion(raw_counts, conversion_table)
-        
+
         n_bins = kwargs.get("bins", 100)
         histogram, bins = np.histogramdd(converted_counts, bins=n_bins)
-        coords = {"phi":bins[0],"psi":bins[1],"KE":bins[2]}
-        dataset_contents["raw"] = xr.DataArray(histogram, coords=coords, dims=tuple(coords.keys()))
+        coords = {"phi": bins[0], "psi": bins[1], "KE": bins[2]}
+        dataset_contents["raw"] = xr.DataArray(
+            histogram, coords=coords, dims=tuple(coords.keys())
+        )
 
         # timing_delay = (
         #     kwargs.get("timing_delay", NOMINAL_TIMING_OFFSET) - NOMINAL_TIMING_OFFSET

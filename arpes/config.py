@@ -178,7 +178,10 @@ def attempt_determine_workspace(current_path=None):
         current_path = os.getcwd()
         for _ in range(3):
             if workspace_matches(current_path):
-                CONFIG["WORKSPACE"] = {"path": current_path, "name": Path(current_path).name}
+                CONFIG["WORKSPACE"] = {
+                    "path": current_path,
+                    "name": Path(current_path).name,
+                }
                 return
 
             current_path = Path(current_path).parent
@@ -231,12 +234,12 @@ def load_plugins() -> None:
     If you need to register a custom plugin you should just call
     `arpes.endstations.add_endstation` directly.
     """
-    import arpes.endstations.plugin as plugin
+    import arpes.endstations.plugins as plugins
     from arpes.endstations import add_endstation
     import importlib
 
-    skip_modules = {"__pycache__", "__init__"}
-    plugins_dir = str(Path(plugin.__file__).parent)
+    skip_modules = {"__pycache__", "__init__", "deprecated"}
+    plugins_dir = str(Path(plugins.__file__).parent)
     modules = os.listdir(plugins_dir)
     modules = [
         m if os.path.isdir(os.path.join(plugins_dir, m)) else os.path.splitext(m)[0]
@@ -246,7 +249,9 @@ def load_plugins() -> None:
 
     for module in modules:
         try:
-            loaded_module = importlib.import_module("arpes.endstations.plugin.{}".format(module))
+            loaded_module = importlib.import_module(
+                f"arpes.endstations.plugins.{module}"
+            )
             for item in loaded_module.__all__:
                 add_endstation(getattr(loaded_module, item))
         except (AttributeError, ImportError):
@@ -340,7 +345,6 @@ def setup_logging():
 
     try:
         if CONFIG["ENABLE_LOGGING"] and not CONFIG["LOGGING_STARTED"]:
-
             CONFIG["LOGGING_STARTED"] = True
 
             from arpes.utilities.jupyter import generate_logfile_path

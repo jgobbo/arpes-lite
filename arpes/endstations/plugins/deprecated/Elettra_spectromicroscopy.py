@@ -61,7 +61,9 @@ def h5_dataset_to_dataarray(dset: h5py.Dataset) -> xr.DataArray:
     }
 
     coords = dict(flat_coords)
-    attrs = {k: unwrap_bytestring(v) for k, v in dset.attrs.items() if k not in DROP_KEYS}
+    attrs = {
+        k: unwrap_bytestring(v) for k, v in dset.attrs.items() if k not in DROP_KEYS
+    }
 
     # attr normalization
     attrs["T"] = round(attrs["Angular Coord"][0], 1)
@@ -78,7 +80,9 @@ def h5_dataset_to_dataarray(dset: h5py.Dataset) -> xr.DataArray:
     del attrs["Stage Coord (XYZR)"]  # temp
 
     ring_info = attrs.pop("Ring En (GeV) GAP (mm) Photon (eV)", None)
-    if ring_info and False:  # <- not trustworthy info, try to autodetect the photon energy
+    if (
+        ring_info and False
+    ):  # <- not trustworthy info, try to autodetect the photon energy
         if isinstance(ring_info, list):
             en, gap, hv = ring_info
         else:
@@ -98,7 +102,9 @@ def h5_dataset_to_dataarray(dset: h5py.Dataset) -> xr.DataArray:
     )
 
 
-class SpectromicroscopyElettraEndstation(HemisphericalEndstation, SynchrotronEndstation):
+class SpectromicroscopyElettraEndstation(
+    HemisphericalEndstation, SynchrotronEndstation
+):
     """Data loading for the nano-ARPES beamline "Spectromicroscopy Elettra".
 
     Information available on the beamline can be accessed
@@ -135,7 +141,10 @@ class SpectromicroscopyElettraEndstation(HemisphericalEndstation, SynchrotronEnd
                 base_files = base_files + [file]
 
         return list(
-            filter(lambda f: os.path.splitext(f)[1] in cls._TOLERATED_EXTENSIONS, base_files)
+            filter(
+                lambda f: os.path.splitext(f)[1] in cls._TOLERATED_EXTENSIONS,
+                base_files,
+            )
         )
 
     ANALYZER_INFORMATION = {
@@ -242,7 +251,9 @@ class SpectromicroscopyElettraEndstation(HemisphericalEndstation, SynchrotronEnd
 
         return [p]
 
-    def load_single_frame(self, frame_path: str = None, scan_desc: dict = None, **kwargs):
+    def load_single_frame(
+        self, frame_path: str = None, scan_desc: dict = None, **kwargs
+    ):
         """Loads a single HDF file with spectromicroscopy Elettra data."""
         with h5py.File(str(frame_path), "r") as f:
             arrays = {k: h5_dataset_to_dataarray(f[k]) for k in f.keys()}
@@ -260,7 +271,9 @@ class SpectromicroscopyElettraEndstation(HemisphericalEndstation, SynchrotronEnd
         2. Adjusting angular coordinates to standard conventions
         3. Microns -> millimeters on spatial coordinates
         """
-        data = data.rename({k: v for k, v in self.RENAME_COORDS.items() if k in data.coords.keys()})
+        data = data.rename(
+            {k: v for k, v in self.RENAME_COORDS.items() if k in data.coords.keys()}
+        )
 
         if "eV" in data.coords:
             approx_workfunction = 3.46
@@ -272,7 +285,9 @@ class SpectromicroscopyElettraEndstation(HemisphericalEndstation, SynchrotronEnd
                 data.coords[coord] = default
 
         data.coords["psi"] = (data.coords["psi"] - 90) * np.pi / 180
-        data.coords["phi"] = (data.coords["phi"] + data.spectrum.attrs["T"]) * np.pi / 180
+        data.coords["phi"] = (
+            (data.coords["phi"] + data.spectrum.attrs["T"]) * np.pi / 180
+        )
         data.coords["beta"] = 0.0
         data.coords["chi"] = 0.0
         data.coords["alpha"] = np.pi / 2
@@ -283,9 +298,11 @@ class SpectromicroscopyElettraEndstation(HemisphericalEndstation, SynchrotronEnd
                 data.coords[dim_name] = data.coords[dim_name] / 1000.0
             else:
                 try:
-                    data.coords[dim_name] = data.S.spectra[0].attrs["stage_coords"][i] / 1000.0
+                    data.coords[dim_name] = (
+                        data.S.spectra[0].attrs["stage_coords"][i] / 1000.0
+                    )
                 except:
                     data.coords[dim_name] = 0.0
 
-        data = super().postprocess_final(data, scan_desc)
+        data = super().postprocess_scan(data, scan_desc)
         return data

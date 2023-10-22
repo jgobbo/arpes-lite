@@ -21,7 +21,10 @@ class ALGMainChamber(HemisphericalEndstation, FITSEndstation):
     ]
 
     ATTR_TRANSFORMS = {
-        "START_T": lambda l: {"time": " ".join(l.split(" ")[1:]).lower(), "date": l.split(" ")[0]},
+        "START_T": lambda l: {
+            "time": " ".join(l.split(" ")[1:]).lower(),
+            "date": l.split(" ")[0],
+        },
     }
 
     RENAME_KEYS = {
@@ -80,7 +83,7 @@ class ALGMainChamber(HemisphericalEndstation, FITSEndstation):
             spectrum.attrs["psi"] = 0
             spectrum.attrs["phi_offset"] = 0.405
 
-        data = super().postprocess_final(data, scan_desc)
+        data = super().postprocess_scan(data, scan_desc)
 
         if "beta" in data.coords:
             data = data.assign_coords(beta=data.beta.values * np.pi / 180)

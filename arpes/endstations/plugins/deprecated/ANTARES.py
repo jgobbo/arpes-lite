@@ -6,7 +6,11 @@ import h5py
 import numpy as np
 
 import xarray as xr
-from arpes.endstations import HemisphericalEndstation, SingleFileEndstation, SynchrotronEndstation
+from arpes.endstations import (
+    HemisphericalEndstation,
+    SingleFileEndstation,
+    SynchrotronEndstation,
+)
 from arpes.endstations.nexus_utils import (
     AttrTarget,
     CoordTarget,
@@ -85,7 +89,9 @@ def infer_scan_type_from_data(group):
     raise NotImplementedError(scan_name)
 
 
-class ANTARESEndstation(HemisphericalEndstation, SynchrotronEndstation, SingleFileEndstation):
+class ANTARESEndstation(
+    HemisphericalEndstation, SynchrotronEndstation, SingleFileEndstation
+):
     """Implements data loading for ANTARES at SOLEIL.
 
     There's not too much metadata here except what comes with the analyzer settings.
@@ -107,7 +113,9 @@ class ANTARESEndstation(HemisphericalEndstation, SynchrotronEndstation, SingleFi
             binding.write_to_dataarray(dr)
 
         try:
-            mbs_key = [k for k in list(group["ANTARES"].keys()) if "MBSAcquisition" in k][0]
+            mbs_key = [
+                k for k in list(group["ANTARES"].keys()) if "MBSAcquisition" in k
+            ][0]
             mbs_group = group["ANTARES"][mbs_key]
             mbs_bindings = read_data_attributes_from_tree(mbs_group, MBS_TREE)
             bindings.extend(mbs_bindings)
@@ -132,8 +140,12 @@ class ANTARESEndstation(HemisphericalEndstation, SynchrotronEndstation, SingleFi
         # handle actuators
         relaxed_shape = list(shape)
         actuator_list = [k for k in list(data.keys()) if "actuator" in k]
-        actuator_long_names = [str(data[act].attrs["long_name"]) for act in actuator_list]
-        actuator_names = [parse_axis_name_from_long_name(name) for name in actuator_long_names]
+        actuator_long_names = [
+            str(data[act].attrs["long_name"]) for act in actuator_list
+        ]
+        actuator_names = [
+            parse_axis_name_from_long_name(name) for name in actuator_long_names
+        ]
 
         # This more carefully deduplicates names if they have a common
         # suffix in the long name format.
@@ -144,7 +156,9 @@ class ANTARESEndstation(HemisphericalEndstation, SynchrotronEndstation, SingleFi
             actuator_names = [
                 name
                 if set_names[name] == 1
-                else parse_axis_name_from_long_name(actuator_long_names[i], keep_segments)
+                else parse_axis_name_from_long_name(
+                    actuator_long_names[i], keep_segments
+                )
                 for i, name in enumerate(actuator_names)
             ]
             set_names = Counter(actuator_names)
@@ -165,7 +179,9 @@ class ANTARESEndstation(HemisphericalEndstation, SynchrotronEndstation, SingleFi
 
             return vs
 
-        for dim_order, name, values in zip(actuator_dim_order, actuator_names, actuator_list):
+        for dim_order, name, values in zip(
+            actuator_dim_order, actuator_names, actuator_list
+        ):
             name = self.RENAME_KEYS.get(name, name)
             dims[dim_order] = name
             coords[name] = take_last(values)
@@ -246,7 +262,9 @@ class ANTARESEndstation(HemisphericalEndstation, SynchrotronEndstation, SingleFi
 
         return xr.DataArray(data, coords=coords, dims=dims)
 
-    def load_single_frame(self, frame_path: str = None, scan_desc: dict = None, **kwargs):
+    def load_single_frame(
+        self, frame_path: str = None, scan_desc: dict = None, **kwargs
+    ):
         """Loads a single ANTARES scan.
 
         Additionally, we try to deduplicate coordinates for multi-region scans here.
@@ -323,4 +341,4 @@ class ANTARESEndstation(HemisphericalEndstation, SynchrotronEndstation, SingleFi
             for s in data.S.spectra:
                 s.attrs[k] = s.attrs.get(k, v)
 
-        return super().postprocess_final(data, scan_desc)
+        return super().postprocess_scan(data, scan_desc)

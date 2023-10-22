@@ -63,9 +63,11 @@ class MBSEndstation(HemisphericalEndstation):
             for s in data.S.spectra:
                 s.attrs[k] = v
 
-        return super().postprocess_final(data, scan_desc)
+        return super().postprocess_scan(data, scan_desc)
 
-    def load_single_frame(self, frame_path: str = None, scan_desc: dict = None, **kwargs):
+    def load_single_frame(
+        self, frame_path: str = None, scan_desc: dict = None, **kwargs
+    ):
         """Load a single frame from an MBS spectrometer.
 
         Most of the complexity here is in header handling and building
@@ -115,5 +117,6 @@ class MBSEndstation(HemisphericalEndstation):
             dims = ["eV"]
 
         return xr.Dataset(
-            {"spectrum": xr.DataArray(data, coords=coords, dims=dims, attrs=attrs)}, attrs=attrs
+            {"spectrum": xr.DataArray(data, coords=coords, dims=dims, attrs=attrs)},
+            attrs=attrs,
         )

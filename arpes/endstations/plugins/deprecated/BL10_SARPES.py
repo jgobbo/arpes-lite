@@ -5,13 +5,19 @@ import numpy as np
 
 import typing
 import xarray as xr
-from arpes.endstations import HemisphericalEndstation, SESEndstation, SynchrotronEndstation
+from arpes.endstations import (
+    HemisphericalEndstation,
+    SESEndstation,
+    SynchrotronEndstation,
+)
 import arpes.xarray_extensions
 
 __all__ = ["BL10012SARPESEndstation"]
 
 
-class BL10012SARPESEndstation(SynchrotronEndstation, HemisphericalEndstation, SESEndstation):
+class BL10012SARPESEndstation(
+    SynchrotronEndstation, HemisphericalEndstation, SESEndstation
+):
     """The Spin-ARPES setup at beamline 10.0.1.2 at the Advanced Light Source."""
 
     PRINCIPAL_NAME = "ALS-BL10-SARPES"
@@ -59,7 +65,9 @@ class BL10012SARPESEndstation(SynchrotronEndstation, HemisphericalEndstation, SE
         "White_spin_White_Zminus": "spectrum_spin_z_down",
     }
 
-    def load_single_frame(self, frame_path: str = None, scan_desc: dict = None, **kwargs):
+    def load_single_frame(
+        self, frame_path: str = None, scan_desc: dict = None, **kwargs
+    ):
         """Loads all regions for a single .pxt frame, and perform per-frame normalization."""
         from arpes.load_pxt import read_single_pxt, find_ses_files_associated
 
@@ -78,7 +86,9 @@ class BL10012SARPESEndstation(SynchrotronEndstation, HemisphericalEndstation, SE
             return pxt_data
         else:
             # need to merge several different detector 'regions' in the same scan
-            region_files = [self.load_single_region(region_path) for region_path in regions]
+            region_files = [
+                self.load_single_region(region_path) for region_path in regions
+            ]
 
             # can they share their energy axes?
             all_same_energy = True
@@ -97,7 +107,9 @@ class BL10012SARPESEndstation(SynchrotronEndstation, HemisphericalEndstation, SE
 
             return self.concatenate_frames(region_files, scan_desc=scan_desc)
 
-    def load_single_region(self, region_path: str = None, scan_desc: dict = None, **kwargs):
+    def load_single_region(
+        self, region_path: str = None, scan_desc: dict = None, **kwargs
+    ):
         """Loads a single region for multi-region scans."""
         import os
         from arpes.load_pxt import read_single_pxt
@@ -156,7 +168,11 @@ class BL10012SARPESEndstation(SynchrotronEndstation, HemisphericalEndstation, SE
         ls = data.S.spectra
         for l in ls:
             for cname in necessary_coord_names:
-                if cname not in l.attrs and cname not in l.coords and cname in data.attrs:
+                if (
+                    cname not in l.attrs
+                    and cname not in l.coords
+                    and cname in data.attrs
+                ):
                     l.attrs[cname] = data.attrs[cname]
 
-        return super().postprocess_final(data, scan_desc)
+        return super().postprocess_scan(data, scan_desc)

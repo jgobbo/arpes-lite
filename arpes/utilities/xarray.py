@@ -13,6 +13,7 @@ __all__ = (
     "lift_dataarray",
     "unwrap_xarray_item",
     "unwrap_xarray_dict",
+    "rename_dataset_keys",
 )
 
 
@@ -52,10 +53,14 @@ def unwrap_xarray_dict(d: Dict[str, Any]) -> Dict[str, Any]:
 
 def apply_dataarray(arr: xr.DataArray, f, *args, **kwargs):
     """Applies a function onto the values of a DataArray."""
-    return xr.DataArray(f(arr.values, *args, **kwargs), arr.coords, arr.dims, attrs=arr.attrs)
+    return xr.DataArray(
+        f(arr.values, *args, **kwargs), arr.coords, arr.dims, attrs=arr.attrs
+    )
 
 
-def lift_dataarray(f: Callable[[np.ndarray], np.ndarray]) -> Callable[[xr.DataArray], xr.DataArray]:
+def lift_dataarray(
+    f: Callable[[np.ndarray], np.ndarray]
+) -> Callable[[xr.DataArray], xr.DataArray]:
     """Lifts a function that operates on an np.ndarray's values to act on an xr.DataArray.
 
     Args:
@@ -71,7 +76,9 @@ def lift_dataarray(f: Callable[[np.ndarray], np.ndarray]) -> Callable[[xr.DataAr
     return g
 
 
-def lift_dataarray_attrs(f: Callable[[dict], dict]) -> Callable[[xr.DataArray], xr.DataArray]:
+def lift_dataarray_attrs(
+    f: Callable[[dict], dict]
+) -> Callable[[xr.DataArray], xr.DataArray]:
     """Lifts a function that operates dicts to a function that acts on dataarray attrs.
 
     Produces a new xr.DataArray.
@@ -84,7 +91,9 @@ def lift_dataarray_attrs(f: Callable[[dict], dict]) -> Callable[[xr.DataArray], 
     """
 
     def g(arr: xr.DataArray, *args, **kwargs):
-        return xr.DataArray(arr.values, arr.coords, arr.dims, attrs=f(arr.attrs, *args, **kwargs))
+        return xr.DataArray(
+            arr.values, arr.coords, arr.dims, attrs=f(arr.attrs, *args, **kwargs)
+        )
 
     return g
 
@@ -114,3 +123,28 @@ def lift_datavar_attrs(f: Callable[[dict], dict]) -> Callable[[DataType], DataTy
         return xr.Dataset(new_vars, data.coords, new_root_attrs)
 
     return g
+
+
+def rename_dataset_keys(dataset: xr.Dataset, rename_keys: dict):
+    """
+    Renames all keys in a dataset, including data variables, coordinates, dimensions, and attributes.
+    """
+    existing_data_keys = set.union(
+        *[set(key_dict.keys()) for key_dict in [dataset.coords, dataset.data_vars]]
+    )
+    existing_attr_keys = set(dataset.attrs.keys())
+
+    renameable_data = {}
+    renameable_attrs = {}
+    for key in rename_keys.keys():
+        # J: We prefer to rename data over attributes. We may want to swap this or rename both.
+        if key in existing_data_keys:
+            renameable_data[key] = rename_keys[key]
+        elif key in existing_attr_keys:
+            renameable_attrs[key] = rename_keys[key]
+
+    dataset = dataset.rename(renameable_data)
+    for k, v in renameable_attrs.items():
+        dataset.attrs[v] = dataset.attrs.pop(k)
+
+    return dataset
