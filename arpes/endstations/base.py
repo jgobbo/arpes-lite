@@ -326,43 +326,67 @@ class EndstationBase:
 
         if spectrum_type is not None:
             data.attrs["spectrum_type"] = spectrum_type
-            if "spectrum" in data.data_vars:
-                data.spectrum.attrs["spectrum_type"] = spectrum_type
+            # J: get rid of this
+            # if "spectrum" in data.data_vars:
+            #     data.spectrum.attrs["spectrum_type"] = spectrum_type
         else:
             warnings.warn(
                 f"Could not determine spectrum type from coordinates {coord_names}."
             )
 
         # J: check if this whole for l in ls thing is necessary, it might be causing problems
-        ls = [data] + data.S.spectra
-        for l in ls:
-            for k, key_fn in self.ATTR_TRANSFORMS.items():
-                if k in l.attrs:
-                    transformed = key_fn(l.attrs[k])
-                    if isinstance(transformed, dict):
-                        l.attrs.update(transformed)
-                    else:
-                        l.attrs[k] = transformed
+        # ls = [data] + data.S.spectra
+        # for l in ls:
+        #     for k, key_fn in self.ATTR_TRANSFORMS.items():
+        #         if k in l.attrs:
+        #             transformed = key_fn(l.attrs[k])
+        #             if isinstance(transformed, dict):
+        #                 l.attrs.update(transformed)
+        #             else:
+        #                 l.attrs[k] = transformed
 
-        for l in ls:
-            for k, v in self.MERGE_ATTRS.items():
-                if k not in l.attrs:
-                    l.attrs[k] = v
+        # for l in ls:
+        #     for k, v in self.MERGE_ATTRS.items():
+        #         if k not in l.attrs:
+        #             l.attrs[k] = v
 
-        for l in ls:
-            for c in self.ENSURE_COORDS_EXIST:
-                if c not in l.coords:
-                    if c in l.attrs:
-                        l.coords[c] = l.attrs[c]
-                    else:
-                        warnings.warn(
-                            f"Could not assign coordinate {c} from attributes, assigning np.nan instead."
-                        )
-                        l.coords[c] = np.nan
+        # for l in ls:
+        #     for c in self.ENSURE_COORDS_EXIST:
+        #         if c not in l.coords:
+        #             if c in l.attrs:
+        #                 l.coords[c] = l.attrs[c]
+        #             else:
+        #                 warnings.warn(
+        #                     f"Could not assign coordinate {c} from attributes, assigning np.nan instead."
+        #                 )
+        #                 l.coords[c] = np.nan
 
-        for l in ls:
-            if "chi" in l.coords and "chi_offset" not in l.attrs:
-                l.attrs["chi_offset"] = l.coords["chi"].item()
+        # for l in ls:
+        #     if "chi" in l.coords and "chi_offset" not in l.attrs:
+        #         l.attrs["chi_offset"] = l.coords["chi"].item()
+
+        # J: same as above section but only applied to dataset
+        for k, key_fn in self.ATTR_TRANSFORMS.items():
+            if k in data.attrs:
+                transformed = key_fn(data.attrs[k])
+                if isinstance(transformed, dict):
+                    data.attrs.update(transformed)
+                else:
+                    data.attrs[k] = transformed
+        for k, v in self.MERGE_ATTRS.items():
+            if k not in data.attrs:
+                data.attrs[k] = v
+        for c in self.ENSURE_COORDS_EXIST:
+            if c not in data.coords:
+                if c in data.attrs:
+                    data.coords[c] = data.attrs[c]
+                else:
+                    warnings.warn(
+                        f"Could not assign coordinate {c} from attributes, assigning np.nan instead."
+                    )
+                    data.coords[c] = np.nan
+        if "chi" in data.coords and "chi_offset" not in data.attrs:
+            data.attrs["chi_offset"] = data.coords["chi"].item()
 
         # go and change endianness and datatypes to something reasonable
         # this is done for performance reasons in momentum space conversion, primarily
@@ -518,6 +542,7 @@ class FITSEndstation(SingleFileEndstation):
         hdulist = fits.open(frame_path, ignore_missing_end=True)
         primary_dataset_name = None
 
+        # J: TODO see if this is necessary. Labview should be fixed to not produce this.
         # Clean the header because sometimes out LabView produces improper FITS files
         for i in range(len(hdulist)):
             # This looks a little stupid, but because of confusing astropy internals actually works
@@ -563,6 +588,7 @@ class FITSEndstation(SingleFileEndstation):
         # attrs = rename_keys(attrs, self.RENAME_KEYS)
         # scan_desc = rename_keys(scan_desc, self.RENAME_KEYS)
 
+        # J: TODO don't want to do this here unless I have to
         def clean_key_name(k: str) -> str:
             if "#" in k:
                 k = k.replace("#", "num")
@@ -572,22 +598,23 @@ class FITSEndstation(SingleFileEndstation):
         attrs = {clean_key_name(k): v for k, v in attrs.items()}
         scan_desc = {clean_key_name(k): v for k, v in scan_desc.items()}
 
-        # this belongs in process frame/scan
-        # don't have phi because we need to convert pixels first
-        deg_to_rad_coords = {"beta", "theta", "chi"}
+        # J: moved to process frame
+        # # this belongs in process frame/scan
+        # # don't have phi because we need to convert pixels first
+        # deg_to_rad_coords = {"beta", "theta", "chi"}
 
-        # convert angular attributes to radians
-        for coord_name in deg_to_rad_coords:
-            if coord_name in attrs:
-                try:
-                    attrs[coord_name] = float(attrs[coord_name]) * (np.pi / 180)
-                except (TypeError, ValueError):
-                    pass
-            if coord_name in scan_desc:
-                try:
-                    scan_desc[coord_name] = float(scan_desc[coord_name]) * (np.pi / 180)
-                except (TypeError, ValueError):
-                    pass
+        # # convert angular attributes to radians
+        # for coord_name in deg_to_rad_coords:
+        #     if coord_name in attrs:
+        #         try:
+        #             attrs[coord_name] = float(attrs[coord_name]) * (np.pi / 180)
+        #         except (TypeError, ValueError):
+        #             pass
+        #     if coord_name in scan_desc:
+        #         try:
+        #             scan_desc[coord_name] = float(scan_desc[coord_name]) * (np.pi / 180)
+        #         except (TypeError, ValueError):
+        #             pass
 
         data_vars = {}
 
@@ -686,7 +713,7 @@ class FITSEndstation(SingleFileEndstation):
                     k: c for k, c in built_coords.items() if k in dimension_for_column
                 },
                 dims=dimension_for_column,
-                attrs=attrs,
+                # attrs=attrs, # J: data_vars don't need attrs
             )
 
         # J: This whole section shouldn't be here if it only applies to the MC.
@@ -725,6 +752,8 @@ class FITSEndstation(SingleFileEndstation):
         #     for k, c in built_coords.items()
         # }
 
+        hdulist.close()
+
         self.trace("Stitching together xr.Dataset.")
         return xr.Dataset(
             {
@@ -735,19 +764,18 @@ class FITSEndstation(SingleFileEndstation):
         )
 
     def postprocess_frame(self, frame: xr.Dataset):
-        # J: TODO - find an elegant way to rename spectra to spectrum.
         # spectra_names = [name for name in frame.data_vars if "spectra" in name.lower()]
         frame = super().postprocess_frame(frame)
 
-        deg_to_rad_coords = {"beta", "theta", "chi"}
+        # J: TODO - make sure this works
+        deg_to_rad_coords = {"beta", "theta", "psi"}
         for coord_name in deg_to_rad_coords:
-            if coord_name in frame.attrs:
-                try:
-                    frame.attrs[coord_name] = float(frame.attrs[coord_name]) * (
-                        np.pi / 180
-                    )
-                except (TypeError, ValueError):
-                    pass
+            for data_type in [frame.coords, frame.attrs]:
+                if coord_name in data_type:
+                    try:
+                        data_type[coord_name] = data_type[coord_name] * (np.pi / 180)
+                    except (TypeError, ValueError):
+                        pass
 
         return frame
 

@@ -64,17 +64,24 @@ class MAESTROARPESEndstationBase(
 
     # @override py3.12
     def postprocess_scan(self, data: xr.Dataset, scan_desc: dict = None):
-        ls = [data] + data.S.spectra
-        for l in ls:
-            l.attrs.update(self.ANALYZER_INFORMATION)
+        # ls = [data] + data.S.spectra
+        # for l in ls:
+        #     l.attrs.update(self.ANALYZER_INFORMATION)
 
-            if "GRATING" in l.attrs:
-                l.attrs["grating_lines_per_mm"] = {
-                    "G201b": 600,
-                }.get(l.attrs["GRATING"])
+        #     if "GRATING" in l.attrs:
+        #         l.attrs["grating_lines_per_mm"] = {
+        #             "G201b": 600,
+        #         }.get(l.attrs["GRATING"])
+
+        data.attrs.update(self.ANALYZER_INFORMATION)
+
+        if "GRATING" in data.attrs:
+            data.attrs["grating_lines_per_mm"] = {
+                "G201b": 600,
+            }.get(data.attrs["GRATING"])
 
         if "scan_x" in data.coords:
-            # data.sel(scan_x=slice(None, None, -1)) #J: it might be possible to do this more simply
+            # data.sel(scan_x=slice(None, None, -1)) #J: this might be a simpler way to do all below
             for data_var in data.data_vars:
                 if "spectrum" in data_var:
                     data[data_var].values = np.flip(
@@ -166,8 +173,14 @@ class MAESTROMicroARPESEndstation(MAESTROARPESEndstationBase):
     def postprocess_scan(self, data: xr.Dataset, scan_desc: dict = None):
         data = super().postprocess_scan(data, scan_desc)
 
+        conversion_factor = {
+            "Angular30": 0.181,
+            "Angular14": 0.0963,
+            "Angular7NF": 0.04264,
+        }[data.attrs["SSLNM0"]]
+
         if "phi" in data.coords:
-            data.coords["phi"] = (0.181 / 200) * (
+            data.coords["phi"] = (conversion_factor / 200) * (
                 data.coords["phi"] - data.coords["phi"].mean()
             )
 

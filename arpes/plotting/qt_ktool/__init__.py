@@ -6,7 +6,14 @@ from arpes.utilities import normalize_to_spectrum, group_by
 from arpes.typing import DataType
 from arpes.utilities.conversion import convert_to_kspace
 from arpes.utilities.qt import qt_info, SimpleApp, SimpleWindow
-from arpes.utilities.ui import tabs, horizontal, vertical, label, numeric_input, CollectUI
+from arpes.utilities.ui import (
+    tabs,
+    horizontal,
+    vertical,
+    label,
+    numeric_input,
+    CollectUI,
+)
 from arpes.plotting.bz import segments_standard
 
 
@@ -33,7 +40,9 @@ class KTool(SimpleApp):
 
     DEFAULT_COLORMAP = "viridis"
 
-    def __init__(self, apply_offsets=True, zone=None, **kwargs):
+    def __init__(
+        self, apply_offsets=True, zone=None, energy_window=slice(-0.05, 0.05), **kwargs
+    ):
         """Set attributes to safe defaults and unwrap the Brillouin zone definition."""
         super().__init__()
 
@@ -47,6 +56,7 @@ class KTool(SimpleApp):
         else:
             self.segments_x, self.segments_y = None, None
 
+        self.energy_window = energy_window
         self.conversion_kwargs = kwargs
         self.data = None
         self.content_layout = None
@@ -55,8 +65,12 @@ class KTool(SimpleApp):
 
     def configure_image_widgets(self):
         """We have two marginals because we deal with Fermi surfaces, they get configured here."""
-        self.generate_marginal_for((), 0, 0, "xy", cursors=False, layout=self.content_layout)
-        self.generate_marginal_for((), 1, 0, "kxy", cursors=False, layout=self.content_layout)
+        self.generate_marginal_for(
+            (), 0, 0, "xy", cursors=False, layout=self.content_layout
+        )
+        self.generate_marginal_for(
+            (), 1, 0, "kxy", cursors=False, layout=self.content_layout
+        )
 
     def add_contextual_widgets(self):
         """The main UI layout for controls and tools."""
@@ -138,7 +152,9 @@ class KTool(SimpleApp):
             bz_plot = self.views["kxy"].plot_item
             kx, ky = self.conversion_kwargs["kx"], self.conversion_kwargs["ky"]
             for segx, segy in zip(self.segments_x, self.segments_y):
-                bz_plot.plot((segx - kx[0]) / (kx[1] - kx[0]), (segy - ky[0]) / (ky[1] - ky[0]))
+                bz_plot.plot(
+                    (segx - kx[0]) / (kx[1] - kx[0]), (segy - ky[0]) / (ky[1] - ky[0])
+                )
 
     def before_show(self):
         """Lifecycle hook for configuration before app show."""
@@ -162,7 +178,7 @@ class KTool(SimpleApp):
 
         if len(data.dims) > 2:
             assert "eV" in original_data.dims
-            data = data.sel(eV=slice(-0.05, 0.05)).sum("eV", keep_attrs=True)
+            data = data.sel(eV=self.energy_window).sum("eV", keep_attrs=True)
             data.coords["eV"] = 0
         else:
             data = original_data
