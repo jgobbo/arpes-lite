@@ -4,25 +4,19 @@ import warnings
 import re
 
 import numpy as np
-import h5py
 import xarray as xr
 from astropy.io import fits
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 import copy
 import arpes.config
 import arpes.constants
 import os.path
 
-from arpes.load_pxt import read_single_pxt, find_ses_files_associated
 from arpes.utilities.dict import case_insensitive_get
 from arpes.utilities.xarray import rename_dataset_keys
-from arpes.provenance import provenance_from_file
-from arpes.endstations.utils.fits import find_clean_coords
-from arpes.endstations.utils.igor import shim_wave_note
-from arpes.repair import negate_energy
-
+from arpes.endstations.utilities.fits import find_clean_coords
 
 __all__ = [
     "endstation_name_from_alias",
@@ -260,15 +254,6 @@ class EndstationBase:
         2. Rename attributes
         """
 
-        # from arpes.utilities import rename_keys
-        # frame = xr.Dataset(
-        #     {
-        #         k: rename_dataarray_attrs(v, self.RENAME_KEYS)
-        #         for k, v in frame.data_vars.items()
-        #     },
-        #     attrs=rename_keys(frame.attrs, self.RENAME_KEYS),
-        # )
-
         # J: all attributes/coords get renamed here and nowhere else
         frame = rename_dataset_keys(frame, self.RENAME_KEYS)
 
@@ -326,46 +311,11 @@ class EndstationBase:
 
         if spectrum_type is not None:
             data.attrs["spectrum_type"] = spectrum_type
-            # J: get rid of this
-            # if "spectrum" in data.data_vars:
-            #     data.spectrum.attrs["spectrum_type"] = spectrum_type
         else:
             warnings.warn(
                 f"Could not determine spectrum type from coordinates {coord_names}."
             )
 
-        # J: check if this whole for l in ls thing is necessary, it might be causing problems
-        # ls = [data] + data.S.spectra
-        # for l in ls:
-        #     for k, key_fn in self.ATTR_TRANSFORMS.items():
-        #         if k in l.attrs:
-        #             transformed = key_fn(l.attrs[k])
-        #             if isinstance(transformed, dict):
-        #                 l.attrs.update(transformed)
-        #             else:
-        #                 l.attrs[k] = transformed
-
-        # for l in ls:
-        #     for k, v in self.MERGE_ATTRS.items():
-        #         if k not in l.attrs:
-        #             l.attrs[k] = v
-
-        # for l in ls:
-        #     for c in self.ENSURE_COORDS_EXIST:
-        #         if c not in l.coords:
-        #             if c in l.attrs:
-        #                 l.coords[c] = l.attrs[c]
-        #             else:
-        #                 warnings.warn(
-        #                     f"Could not assign coordinate {c} from attributes, assigning np.nan instead."
-        #                 )
-        #                 l.coords[c] = np.nan
-
-        # for l in ls:
-        #     if "chi" in l.coords and "chi_offset" not in l.attrs:
-        #         l.attrs["chi_offset"] = l.coords["chi"].item()
-
-        # J: same as above section but only applied to dataset
         for k, key_fn in self.ATTR_TRANSFORMS.items():
             if k in data.attrs:
                 transformed = key_fn(data.attrs[k])
@@ -583,11 +533,6 @@ class FITSEndstation(SingleFileEndstation):
         )
         self.trace("Recovered coordinates from FITS file.")
 
-        # J: Probably not where I want to do this
-        # from arpes.utilities import rename_keys
-        # attrs = rename_keys(attrs, self.RENAME_KEYS)
-        # scan_desc = rename_keys(scan_desc, self.RENAME_KEYS)
-
         # J: TODO don't want to do this here unless I have to
         def clean_key_name(k: str) -> str:
             if "#" in k:
@@ -598,30 +543,7 @@ class FITSEndstation(SingleFileEndstation):
         attrs = {clean_key_name(k): v for k, v in attrs.items()}
         scan_desc = {clean_key_name(k): v for k, v in scan_desc.items()}
 
-        # J: moved to process frame
-        # # this belongs in process frame/scan
-        # # don't have phi because we need to convert pixels first
-        # deg_to_rad_coords = {"beta", "theta", "chi"}
-
-        # # convert angular attributes to radians
-        # for coord_name in deg_to_rad_coords:
-        #     if coord_name in attrs:
-        #         try:
-        #             attrs[coord_name] = float(attrs[coord_name]) * (np.pi / 180)
-        #         except (TypeError, ValueError):
-        #             pass
-        #     if coord_name in scan_desc:
-        #         try:
-        #             scan_desc[coord_name] = float(scan_desc[coord_name]) * (np.pi / 180)
-        #         except (TypeError, ValueError):
-        #             pass
-
         data_vars = {}
-
-        # all_names = hdu.columns.names
-        # n_spectra = len(
-        #     [n for n in all_names if "Fixed_Spectra" in n or "Swept_Spectra" in n]
-        # )
         for column_name in hdu.columns.names:
             # we skip some fixed set of the columns, such as the one dimensional axes, as well as things that are too
             # tricky to load at the moment, like the microscope images from MAESTRO
@@ -641,23 +563,6 @@ class FITSEndstation(SingleFileEndstation):
             column_shape = real_spectrum_shape[column_name]
 
             column_display = self.PREPPED_COLUMN_NAMES.get(column_name, column_name)
-
-            # J: this seems to cause issues, if deleting is a problem, add a .spectrum attribute to acces whichever exists
-            # if "Fixed_Spectra" in column_display:
-            #     if n_spectra == 1:
-            #         column_display = "spectrum"
-            #     else:
-            #         column_display = (
-            #             "spectrum" + "-" + column_display.split("Fixed_Spectra")[1]
-            #         )
-
-            # if "Swept_Spectra" in column_display:
-            #     if n_spectra == 1:
-            #         column_display = "spectrum"
-            #     else:
-            #         column_display = (
-            #             "spectrum" + "-" + column_display.split("Swept_Spectra")[1]
-            #         )
 
             # sometimes if a scan is terminated early it can happen that the sizes do not match the expected value
             # as an example, if a beta map is supposed to have 401 slices, it might end up having only 260 if it were
@@ -713,44 +618,7 @@ class FITSEndstation(SingleFileEndstation):
                     k: c for k, c in built_coords.items() if k in dimension_for_column
                 },
                 dims=dimension_for_column,
-                # attrs=attrs, # J: data_vars don't need attrs
             )
-
-        # J: This whole section shouldn't be here if it only applies to the MC.
-        #    It should be moved to the MC endstation process_frame method.
-        # def prep_spectrum(data: xr.DataArray):
-        #     # don't do center pixel inference because the main chamber
-        #     # at least consistently records the offset from the edge
-        #     # of the recorded window
-        #     if "pixel" in data.coords:
-        #         phi_axis = (
-        #             data.coords["pixel"].values
-        #             * arpes.constants.SPECTROMETER_MC["rad_per_pixel"]
-        #         )
-
-        #         if "pixel" in data.coords:
-        #             data = data.rename(pixel="phi")
-
-        #         data = data.assign_coords(phi=phi_axis)
-
-        #     # Always attach provenance
-        #     provenance_from_file(
-        #         data,
-        #         frame_path,
-        #         {"what": "Loaded MC dataset from FITS.", "by": "load_MC"},
-        #     )
-
-        #     return data
-
-        # if "spectrum" in data_vars:
-        #     data_vars["spectrum"] = prep_spectrum(data_vars["spectrum"])
-
-        # J: also shouldn't be here
-        # adjust angular coordinates
-        # built_coords = {
-        #     k: c * (np.pi / 180) if k in deg_to_rad_coords else c
-        #     for k, c in built_coords.items()
-        # }
 
         hdulist.close()
 
@@ -764,7 +632,6 @@ class FITSEndstation(SingleFileEndstation):
         )
 
     def postprocess_frame(self, frame: xr.Dataset):
-        # spectra_names = [name for name in frame.data_vars if "spectra" in name.lower()]
         frame = super().postprocess_frame(frame)
 
         # J: TODO - make sure this works
@@ -917,147 +784,3 @@ def load_scan(
     endstation = endstation_cls()
     endstation.trace = trace
     return endstation.load(scan_desc, trace=trace, **kwargs)
-
-
-# J: Deprecated below here
-
-
-# class SESEndstation(EndstationBase):
-#     """Provides collation and loading for Scienta's SESWrapper and endstations using it.
-
-#     These files have special frame names, at least at the beamlines Conrad has encountered.
-#     """
-
-#     def resolve_frame_locations(self, scan_desc: dict = None):
-#         if scan_desc is None:
-#             raise ValueError(
-#                 "Must pass dictionary as file scan_desc to all endstation loading code."
-#             )
-
-#         original_data_loc = scan_desc.get("path", scan_desc.get("file"))
-#         p = Path(original_data_loc)
-#         if not p.exists():
-#             original_data_loc = os.path.join(arpes.config.DATA_PATH, original_data_loc)
-
-#         p = Path(original_data_loc)
-#         return find_ses_files_associated(p)
-
-#     def load_single_frame(
-#         self, frame_path: str = None, scan_desc: dict = None, **kwargs
-#     ):
-#         name, ext = os.path.splitext(frame_path)
-
-#         if "nc" in ext:
-#             # was converted to hdf5/NetCDF format with Conrad's Igor scripts
-#             scan_desc = copy.deepcopy(scan_desc)
-#             scan_desc["path"] = frame_path
-#             return self.load_SES_nc(scan_desc=scan_desc, **kwargs)
-
-#         # it's given by SES PXT files
-#         pxt_data = negate_energy(read_single_pxt(frame_path))
-#         return xr.Dataset({"spectrum": pxt_data}, attrs=pxt_data.attrs)
-
-#     def postprocess(self, frame: xr.Dataset):
-#         import arpes.xarray_extensions  # pylint: disable=unused-import, redefined-outer-name
-
-#         frame = super().postprocess_frame(frame)
-#         return frame.assign_attrs(frame.S.spectrum.attrs)
-
-#     def load_SES_nc(
-#         self, scan_desc: dict = None, robust_dimension_labels=False, **kwargs
-#     ):
-#         """Imports an hdf5 dataset exported from Igor that was originally generated in SESb format.
-
-#         In order to understand the structure of these files have a look at Conrad's saveSESDataset in
-#         Igor Pro.
-
-#         Args:
-#             scan_desc: Dictionary with extra information to attach to the xr.Dataset, must contain the location
-#               of the file
-#             robust_dimension_labels: safety control, used to load despite possibly malformed dimension names
-
-#         Returns:
-#             Loaded data.
-#         """
-#         scan_desc = copy.deepcopy(scan_desc)
-
-#         data_loc = scan_desc.get("path", scan_desc.get("file"))
-#         p = Path(data_loc)
-#         if not p.exists():
-#             data_loc = os.path.join(arpes.config.DATA_PATH, data_loc)
-
-#         wave_note = shim_wave_note(data_loc)
-#         f = h5py.File(data_loc, "r")
-
-#         primary_dataset_name = list(f)[0]
-#         # This is bugged for the moment in h5py due to an inability to read fixed length unicode strings
-#         # wave_note = f['/' + primary_dataset_name].attrs['IGORWaveNote']
-
-#         # Use dimension labels instead of
-#         dimension_labels = list(
-#             f["/" + primary_dataset_name].attrs["IGORWaveDimensionLabels"][0]
-#         )
-#         if any(x == "" for x in dimension_labels):
-#             print(dimension_labels)
-
-#             if not robust_dimension_labels:
-#                 raise ValueError(
-#                     "Missing dimension labels. Use robust_dimension_labels=True to override"
-#                 )
-#             else:
-#                 used_blanks = 0
-#                 for i in range(len(dimension_labels)):
-#                     if dimension_labels[i] == "":
-#                         dimension_labels[i] = "missing{}".format(used_blanks)
-#                         used_blanks += 1
-
-#                 print(dimension_labels)
-
-#         scaling = f["/" + primary_dataset_name].attrs["IGORWaveScaling"][
-#             -len(dimension_labels) :
-#         ]
-#         raw_data = f["/" + primary_dataset_name][:]
-
-#         scaling = [
-#             np.linspace(
-#                 scale[1], scale[1] + scale[0] * raw_data.shape[i], raw_data.shape[i]
-#             )
-#             for i, scale in enumerate(scaling)
-#         ]
-
-#         dataset_contents = {}
-#         attrs = scan_desc.pop("note", {})
-#         attrs.update(wave_note)
-
-#         built_coords = dict(zip(dimension_labels, scaling))
-
-#         deg_to_rad_coords = {"theta", "beta", "phi", "alpha", "psi"}
-
-#         # the hemisphere axis is handled below
-#         built_coords = {
-#             k: c * (np.pi / 180) if k in deg_to_rad_coords else c
-#             for k, c in built_coords.items()
-#         }
-
-#         deg_to_rad_attrs = {"theta", "beta", "alpha", "psi", "chi"}
-#         for angle_attr in deg_to_rad_attrs:
-#             if angle_attr in attrs:
-#                 attrs[angle_attr] = float(attrs[angle_attr]) * np.pi / 180
-
-#         dataset_contents["spectrum"] = xr.DataArray(
-#             raw_data,
-#             coords=built_coords,
-#             dims=dimension_labels,
-#             attrs=attrs,
-#         )
-
-#         provenance_from_file(
-#             dataset_contents["spectrum"],
-#             data_loc,
-#             {"what": "Loaded SES dataset from HDF5.", "by": "load_SES"},
-#         )
-
-#         return xr.Dataset(
-#             dataset_contents,
-#             attrs={**scan_desc, "name": primary_dataset_name},
-#         )
