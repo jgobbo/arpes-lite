@@ -30,14 +30,16 @@ class CoordinateConverter:
     These different roles and how they are accomplished are discussed in detail below.
     """
 
-    def __init__(self, arr: xr.DataArray, dim_order=None, calibration=None, *args, **kwargs):
+    def __init__(
+        self, ds: xr.Dataset, dim_order=None, calibration=None, *args, **kwargs
+    ):
         """Intern the volume so that we can check on things during computation."""
-        self.arr = arr
+        self.ds = ds
         self.dim_order = dim_order
         self.calibration = calibration
 
-    def prep(self, arr: xr.DataArray):
-        """Perform preprocessing of the array to convert before we start.
+    def prep(self, ds: xr.Dataset):
+        """Perform preprocessing of the dataset to convert before we start.
 
         The CoordinateConverter.prep method allows you to pre-compute some transformations
         that are common to the individual coordinate transform methods as an optimization.
@@ -61,7 +63,9 @@ class CoordinateConverter:
         a future refactor could just push these details to a subclass.
         """
         # 89 - 91 degrees
-        return np.abs(self.arr.S.lookup_offset_coord("alpha") - np.pi / 2) < (np.pi / 180)
+        return np.abs(self.ds.S.lookup_offset_coord("alpha") - np.pi / 2) < (
+            np.pi / 180
+        )
 
     def kspace_to_BE(
         self, binding_energy: np.ndarray, *args: np.ndarray, **kwargs: Any
@@ -87,5 +91,5 @@ class CoordinateConverter:
     def get_coordinates(self, resolution: dict = None, bounds: dict = None):
         """Calculates the coordinates which should be used in momentum space."""
         coordinates = {}
-        coordinates["eV"] = self.arr.coords["eV"]
+        coordinates["eV"] = self.ds.coords["eV"]
         return coordinates

@@ -89,7 +89,7 @@ class ConvertTrapezoidalCorrection(CoordinateConverter):
         )
 
     def get_coordinates(self, *args, **kwargs):
-        return self.arr.indexes
+        return self.ds.indexes
 
     def conversion_for(self, dim: str) -> Callable:
         def with_identity(*args, **kwargs):
@@ -99,7 +99,9 @@ class ConvertTrapezoidalCorrection(CoordinateConverter):
             "phi": self.phi_to_phi,
         }.get(dim, with_identity)
 
-    def phi_to_phi(self, binding_energy: np.ndarray, phi: np.ndarray, *args: Any, **kwargs: Any):
+    def phi_to_phi(
+        self, binding_energy: np.ndarray, phi: np.ndarray, *args: Any, **kwargs: Any
+    ):
         if self.phi is not None:
             return self.phi
         self.phi = np.zeros_like(phi)
@@ -166,7 +168,9 @@ def apply_trapezoidal_correction(
     converted_dims = data.dims
 
     restore_index_like_coordinates = {r: data.coords[r].values for r in removed}
-    new_index_like_coordinates = {r: np.arange(len(data.coords[r].values)) for r in removed}
+    new_index_like_coordinates = {
+        r: np.arange(len(data.coords[r].values)) for r in removed
+    }
     data = data.assign_coords(**new_index_like_coordinates)
 
     converter = ConvertTrapezoidalCorrection(data, converted_dims, corners=corners)
@@ -178,7 +182,9 @@ def apply_trapezoidal_correction(
         converted_coordinates,
         {
             "dims": data.dims,
-            "transforms": dict(zip(data.dims, [converter.conversion_for(d) for d in data.dims])),
+            "transforms": dict(
+                zip(data.dims, [converter.conversion_for(d) for d in data.dims])
+            ),
         },
         trace=trace,
     )

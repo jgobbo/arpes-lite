@@ -1,0 +1,9 @@
+Listed below are major changes which deprecate a significant amount of the codebase. I will be refactoring the codebase as I use it, so don't expect everything to work. It's possible most things won't work.
+
+1. Data loading now renames DataSet keys once and only once in postprocess_frame. 
+    This should make it easier to add/modify key renaming. It also makes it easier to determine key names at each stage of data loading.
+2. Attributes have been removed from data_vars, so they only exist in the full DataSet. 
+    My philosophy here is that functions should always be provided the full DataSet (from which a spectrum can be extracted), so the 
+    attrs only need to exist in one place.
+
+read notes for more details on the purpose of changes

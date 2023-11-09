@@ -321,7 +321,7 @@ def slice_along_path(
 @update_provenance("Automatically k-space converted")
 @traceable
 def convert_to_kspace(
-    arr: xr.DataArray,
+    dataset: xr.Dataset,
     bounds=None,
     resolution=None,
     calibration=None,
@@ -329,7 +329,7 @@ def convert_to_kspace(
     allow_chunks: bool = False,
     trace: Callable = None,
     **kwargs,
-):
+) -> xr.Dataset:
     """Converts volumetric the data to momentum space ("backwards"). Typically what you want.
 
     Works in general by regridding the data into the new coordinate space and then
@@ -390,24 +390,18 @@ def convert_to_kspace(
     coords.update(kwargs)
 
     trace("Normalizing to spectrum")
-    if isinstance(arr, xr.Dataset):
-        warnings.warn(
-            "Remember to use a DataArray not a Dataset, attempting to extract spectrum and copy attributes."
-        )
-        attrs = arr.attrs.copy()
-        arr = normalize_to_spectrum(arr)
-        arr.attrs.update(attrs)
+    spectrum: xr.DataArray = dataset.S.spectrum
 
-    has_eV = "eV" in arr.dims
+    has_eV = "eV" in dataset.dims
 
     # Chunking logic
-    if allow_chunks and has_eV and len(arr.eV) > 50:
+    if allow_chunks and has_eV and len(dataset.eV) > 50:
         DESIRED_CHUNK_SIZE = 1000 * 1000 * 20
-        n_chunks = np.prod(arr.shape) // DESIRED_CHUNK_SIZE
+        n_chunks = np.prod(spectrum.shape) // DESIRED_CHUNK_SIZE
         if n_chunks > 100:
             warnings.warn("Input array is very large. Please consider resampling.")
 
-        chunk_thickness = max(len(arr.eV) // n_chunks, 1)
+        chunk_thickness = max(len(dataset.eV) // n_chunks, 1)
 
         trace(f"Chunking along energy: {n_chunks}, thickness {chunk_thickness}")
 
@@ -415,8 +409,8 @@ def convert_to_kspace(
         low_idx = 0
         high_idx = chunk_thickness
 
-        while low_idx < len(arr.eV):
-            chunk = arr.isel(eV=slice(low_idx, high_idx))
+        while low_idx < len(dataset.eV):
+            chunk = dataset.isel(eV=slice(low_idx, high_idx))
 
             if len(chunk.eV) == 1:
                 chunk = chunk.squeeze("eV")
@@ -438,7 +432,7 @@ def convert_to_kspace(
             finished.append(kchunk)
 
             low_idx = high_idx
-            high_idx = min(len(arr.eV), high_idx + chunk_thickness)
+            high_idx = min(len(dataset.eV), high_idx + chunk_thickness)
 
         return xr.concat(finished, dim="eV")
 
@@ -446,8 +440,8 @@ def convert_to_kspace(
 
     # TODO be smarter about the resolution inference
     trace("Determining dimensions and resolution")
-    removed = [d for d in arr.dims if is_dimension_unconvertible(d)]
-    old_dims = [d for d in arr.dims if not is_dimension_unconvertible(d)]
+    removed = [d for d in spectrum.dims if is_dimension_unconvertible(d)]
+    old_dims = [d for d in spectrum.dims if not is_dimension_unconvertible(d)]
 
     # Energy gets put at the front as a standardization
     if "eV" in removed:
@@ -458,12 +452,12 @@ def convert_to_kspace(
     trace("Replacing dummy coordinates with index-like ones.")
     # temporarily reassign coordinates for dimensions we will not
     # convert to "index-like" dimensions
-    restore_index_like_coordinates = {r: arr.coords[r].values for r in removed}
-    new_index_like_coordinates = {r: np.arange(len(arr.coords[r].values)) for r in removed}
-    arr = arr.assign_coords(**new_index_like_coordinates)
+    restore_index_like_coordinates = {r: dataset.coords[r].values for r in removed}
+    new_index_like_coordinates = {r: np.arange(len(dataset.coords[r].values)) for r in removed}
+    dataset = dataset.assign_coords(**new_index_like_coordinates)
 
     if not old_dims:
-        return arr  # no need to convert, might be XPS or similar
+        return dataset  # no need to convert, might be XPS or similar
 
     converted_dims = (
         (["eV"] if has_eV else [])
@@ -479,7 +473,9 @@ def convert_to_kspace(
         # ('chi', 'phi',): ConvertKxKy,
         ("hv", "phi"): ConvertKpKz,
     }.get(tuple(old_dims))
-    converter = convert_cls(arr, converted_dims, calibration=calibration)
+    converter: Union[ConvertKp, ConvertKxKy, ConvertKpKz] = convert_cls(
+        dataset, converted_dims, calibration=calibration
+    )
 
     trace("Converting coordinates")
     converted_coordinates = converter.get_coordinates(resolution=resolution, bounds=bounds)
@@ -492,11 +488,13 @@ def convert_to_kspace(
 
     trace("Calling convert_coordinates")
     result = convert_coordinates(
-        arr,
+        dataset,
         converted_coordinates,
         {
             "dims": converted_dims,
-            "transforms": dict(zip(arr.dims, [converter.conversion_for(d) for d in arr.dims])),
+            "transforms": dict(
+                zip(dataset.dims, [converter.conversion_for(d) for d in dataset.dims])
+            ),
         },
         trace=trace,
     )
@@ -508,16 +506,16 @@ def convert_to_kspace(
 
 @traceable
 def convert_coordinates(
-    arr: xr.DataArray,
-    target_coordinates,
-    coordinate_transform,
-    as_dataset=False,
+    ds: xr.Dataset,
+    target_coordinates: dict,
+    coordinate_transform: dict,
     trace: Callable = None,
-):
-    ordered_source_dimensions = arr.dims
+) -> xr.Dataset:
+    ds = ds.copy(deep=True)
+    ordered_source_dimensions = ds.dims
     trace("Instantiating grid interpolator.")
     grid_interpolator = grid_interpolator_from_dataarray(
-        arr.transpose(*ordered_source_dimensions),
+        ds.S.spectrum.transpose(*ordered_source_dimensions),
         fill_value=float("nan"),
         trace=trace,
     )
@@ -527,40 +525,19 @@ def convert_coordinates(
     # Convert the raw coordinate axes to a set of gridded points
     trace(f"Calling meshgrid: {[len(target_coordinates[d]) for d in coordinate_transform['dims']]}")
     meshed_coordinates = np.meshgrid(
-        *[target_coordinates[dim] for dim in coordinate_transform["dims"]], indexing="ij"
+        *[target_coordinates[dim] for dim in coordinate_transform["dims"]],
+        indexing="ij",
     )
     trace("Raveling coordinates")
     meshed_coordinates = [meshed_coord.ravel() for meshed_coord in meshed_coordinates]
 
-    if "eV" not in arr.dims:
+    if "eV" not in ds.dims:
         try:
-            meshed_coordinates = [arr.S.lookup_offset_coord("eV")] + meshed_coordinates
+            meshed_coordinates = [ds.S.lookup_offset_coord("eV")] + meshed_coordinates
         except ValueError:
             pass
 
-    old_coord_names = [dim for dim in arr.dims if dim not in target_coordinates]
-    old_coordinate_transforms = [
-        coordinate_transform["transforms"][dim] for dim in arr.dims if dim not in target_coordinates
-    ]
-
-    trace(f"Calling coordinate transforms")
-    output_shape = [len(target_coordinates[d]) for d in coordinate_transform["dims"]]
-
-    def compute_coordinate(transform):
-        return np.reshape(
-            transform(*meshed_coordinates),
-            output_shape,
-            order="C",
-        )
-
-    old_dimensions = []
-    for tr in old_coordinate_transforms:
-        trace(f"Running transform {tr}")
-        old_dimensions.append(compute_coordinate(tr))
-
-    trace(f"Done running transforms.")
-
-    ordered_transformations = [coordinate_transform["transforms"][dim] for dim in arr.dims]
+    ordered_transformations = [coordinate_transform["transforms"][dim] for dim in ds.dims]
     trace("Calling grid interpolator")
 
     trace("Pulling back coordinates")
@@ -589,24 +566,16 @@ def convert_coordinates(
 
     trace("Bundling into DataArray")
     target_coordinates = {k: v for k, v in target_coordinates.items() if acceptable_coordinate(v)}
-    data = xr.DataArray(
-        np.reshape(
-            converted_volume,
-            [len(target_coordinates[d]) for d in coordinate_transform["dims"]],
-            order="C",
-        ),
-        target_coordinates,
-        coordinate_transform["dims"],
-        attrs=arr.attrs,
+
+    converted_spectrum = np.reshape(
+        converted_volume,
+        [len(target_coordinates[d]) for d in coordinate_transform["dims"]],
+        order="C",
     )
-    old_mapped_coords = [
-        xr.DataArray(values, target_coordinates, coordinate_transform["dims"], attrs=arr.attrs)
-        for values in old_dimensions
-    ]
-    if as_dataset:
-        vars = {"data": data}
-        vars.update(dict(zip(old_coord_names, old_mapped_coords)))
-        return xr.Dataset(vars, attrs=arr.attrs)
+    spectrum_name = ds.S.spectrum.name
+    spectrum = xr.DataArray(converted_spectrum, target_coordinates, coordinate_transform["dims"])
+    ds = ds.drop_vars(spectrum_name)
+    ds = ds.assign({spectrum_name: spectrum})
 
     trace("Finished")
-    return data
+    return ds
