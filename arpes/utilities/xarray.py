@@ -53,14 +53,10 @@ def unwrap_xarray_dict(d: Dict[str, Any]) -> Dict[str, Any]:
 
 def apply_dataarray(arr: xr.DataArray, f, *args, **kwargs):
     """Applies a function onto the values of a DataArray."""
-    return xr.DataArray(
-        f(arr.values, *args, **kwargs), arr.coords, arr.dims, attrs=arr.attrs
-    )
+    return xr.DataArray(f(arr.values, *args, **kwargs), arr.coords, arr.dims, attrs=arr.attrs)
 
 
-def lift_dataarray(
-    f: Callable[[np.ndarray], np.ndarray]
-) -> Callable[[xr.DataArray], xr.DataArray]:
+def lift_dataarray(f: Callable[[np.ndarray], np.ndarray]) -> Callable[[xr.DataArray], xr.DataArray]:
     """Lifts a function that operates on an np.ndarray's values to act on an xr.DataArray.
 
     Args:
@@ -76,9 +72,7 @@ def lift_dataarray(
     return g
 
 
-def lift_dataarray_attrs(
-    f: Callable[[dict], dict]
-) -> Callable[[xr.DataArray], xr.DataArray]:
+def lift_dataarray_attrs(f: Callable[[dict], dict]) -> Callable[[xr.DataArray], xr.DataArray]:
     """Lifts a function that operates dicts to a function that acts on dataarray attrs.
 
     Produces a new xr.DataArray.
@@ -91,9 +85,7 @@ def lift_dataarray_attrs(
     """
 
     def g(arr: xr.DataArray, *args, **kwargs):
-        return xr.DataArray(
-            arr.values, arr.coords, arr.dims, attrs=f(arr.attrs, *args, **kwargs)
-        )
+        return xr.DataArray(arr.values, arr.coords, arr.dims, attrs=f(arr.attrs, *args, **kwargs))
 
     return g
 

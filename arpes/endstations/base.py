@@ -6,6 +6,7 @@ import re
 import numpy as np
 import xarray as xr
 from astropy.io import fits
+import h5py
 
 from pathlib import Path
 from typing import Any, Dict, List, Union
@@ -17,6 +18,7 @@ import os.path
 from arpes.utilities.dict import case_insensitive_get
 from arpes.utilities.xarray import rename_dataset_keys
 from arpes.endstations.utilities.fits import find_clean_coords
+from arpes.endstations.utilities.hdf5 import construct_coords, get_attrs, dataset_to_array
 
 __all__ = [
     "endstation_name_from_alias",
@@ -24,6 +26,7 @@ __all__ = [
     "add_endstation",
     "load_scan",
     "EndstationBase",
+    "HDF5Endstation",
     "FITSEndstation",
     "HemisphericalEndstation",
     "SynchrotronEndstation",
@@ -132,9 +135,7 @@ class EndstationBase:
         Here, this just means collecting the ones with extensions acceptable to the loader.
         """
         return [
-            f
-            for f in os.listdir(directory)
-            if os.path.splitext(f)[1] in cls._TOLERATED_EXTENSIONS
+            f for f in os.listdir(directory) if os.path.splitext(f)[1] in cls._TOLERATED_EXTENSIONS
         ]
 
     @classmethod
@@ -154,9 +155,7 @@ class EndstationBase:
         workspace = workspace["name"]
 
         base_dir = workspace_path or os.path.join(arpes.config.DATA_PATH, workspace)
-        dir_options = [
-            os.path.join(base_dir, option) for option in cls._SEARCH_DIRECTORIES
-        ]
+        dir_options = [os.path.join(base_dir, option) for option in cls._SEARCH_DIRECTORIES]
 
         # another plugin related option here is we can restrict the number of regexes by allowing plugins
         # to install regexes for particular endstations, if this is needed in the future it might be a good way
@@ -190,9 +189,7 @@ class EndstationBase:
                 pass
 
         if str(file) and str(file)[0] == "f":  # try trimming the f off
-            return cls.find_first_file(
-                str(file)[1:], scan_desc, allow_soft_match=allow_soft_match
-            )
+            return cls.find_first_file(str(file)[1:], scan_desc, allow_soft_match=allow_soft_match)
 
         raise ValueError("Could not find file associated to {}".format(file))
 
@@ -281,40 +278,38 @@ class EndstationBase:
         # attach the 'spectrum_type'
         # TODO move this logic into xarray extensions and customize here
         # only as necessary
-        coord_names = tuple(sorted([c for c in data.dims if c != "cycle"]))
+        # coord_names = tuple(sorted([c for c in data.dims if c != "cycle"]))
 
-        spectrum_type = None
-        # if x, y, or z are present, remove them and check spectrum type
-        if any(d in coord_names for d in {"x", "y", "z"}):
-            coord_names = tuple(c for c in coord_names if c not in {"x", "y", "z"})
-            spectrum_types = {
-                ("eV",): "spem",
-                ("eV", "phi"): "ucut",
-            }
-            spectrum_type = spectrum_types.get(coord_names)
-        else:
-            spectrum_types = {
-                ("eV",): "xps",
-                ("eV", "phi", "theta"): "map",
-                ("eV", "phi", "psi"): "map",
-                ("beta", "eV", "phi"): "map",
-                ("eV", "hv", "phi"): "hv_map",
-                ("eV", "phi"): "cut",
-            }
-            spectrum_type = spectrum_types.get(coord_names)
+        # spectrum_type = None
+        # # if x, y, or z are present, remove them and check spectrum type
+        # if any(d in coord_names for d in {"x", "y", "z"}):
+        #     coord_names = tuple(c for c in coord_names if c not in {"x", "y", "z"})
+        #     spectrum_types = {
+        #         ("eV",): "spem",
+        #         ("eV", "phi"): "ucut",
+        #     }
+        #     spectrum_type = spectrum_types.get(coord_names)
+        # else:
+        #     spectrum_types = {
+        #         ("eV",): "xps",
+        #         ("eV", "phi", "theta"): "map",
+        #         ("eV", "phi", "psi"): "map",
+        #         ("beta", "eV", "phi"): "map",
+        #         ("eV", "hv", "phi"): "hv_map",
+        #         ("eV", "phi"): "cut",
+        #     }
+        #     spectrum_type = spectrum_types.get(coord_names)
 
-        if "phi" not in data.coords:
-            # XPS
-            data.coords["phi"] = 0
-            for spectrum in data.S.spectra:
-                spectrum.coords["phi"] = 0
+        # if "phi" not in data.coords:
+        #     # XPS
+        #     data.coords["phi"] = 0
+        #     for spectrum in data.S.spectra:
+        #         spectrum.coords["phi"] = 0
 
-        if spectrum_type is not None:
-            data.attrs["spectrum_type"] = spectrum_type
-        else:
-            warnings.warn(
-                f"Could not determine spectrum type from coordinates {coord_names}."
-            )
+        # if spectrum_type is not None:
+        #     data.attrs["spectrum_type"] = spectrum_type
+        # else:
+        #     warnings.warn(f"Could not determine spectrum type from coordinates {coord_names}.")
 
         for k, key_fn in self.ATTR_TRANSFORMS.items():
             if k in data.attrs:
@@ -326,15 +321,19 @@ class EndstationBase:
         for k, v in self.MERGE_ATTRS.items():
             if k not in data.attrs:
                 data.attrs[k] = v
-        for c in self.ENSURE_COORDS_EXIST:
-            if c not in data.coords:
-                if c in data.attrs:
-                    data.coords[c] = data.attrs[c]
+        for coord in self.ENSURE_COORDS_EXIST:
+            if coord not in data.coords:
+                if coord in data.data_vars:
+                    value = data.data_vars[coord]
+                    data.drop_vars(coord)
+                    data.coords[coord] = value
+                elif coord in data.attrs:
+                    data.coords[coord] = data.attrs[coord]
                 else:
                     warnings.warn(
-                        f"Could not assign coordinate {c} from attributes, assigning np.nan instead."
+                        f"Could not assign coordinate {coord} from attributes, assigning np.nan instead."
                     )
-                    data.coords[c] = np.nan
+                    data.coords[coord] = np.nan
         if "chi" in data.coords and "chi_offset" not in data.attrs:
             data.attrs["chi_offset"] = data.coords["chi"].item()
 
@@ -377,8 +376,7 @@ class EndstationBase:
         ]
         self.trace(f"Found frames: {resolved_frame_locations}")
         frames = [
-            self.load_single_frame(fpath, scan_desc, **kwargs)
-            for fpath in resolved_frame_locations
+            self.load_single_frame(fpath, scan_desc, **kwargs) for fpath in resolved_frame_locations
         ]
         frames = [self.postprocess_frame(f) for f in frames]
         concatted = self.concatenate_frames(frames, scan_desc)
@@ -413,6 +411,78 @@ class SingleFileEndstation(EndstationBase):
 
         p = Path(original_data_loc)
         return [p]
+
+
+class HDF5Endstation(SingleFileEndstation):
+    """
+    Loads data from the HDF5 format. Assumes the data is stored following the conventions at beamline 7.
+    """
+
+    # If any other endstations use HDF5, we can try to generalize and move BL7 specific code to its plugin
+
+    def load_single_frame(self, frame_path: str = None, scan_desc: dict = None, **kwargs):
+        """Loads a scan from a single .h5 file.
+
+        This assumes the DAQ storage convention set by E. Rotenberg (possibly earlier authors)
+        used at beamline 7 (and elsewhere).
+
+        This involves several complications:
+
+        1. Hydrating/extracting coordinates from start/delta/n formats
+        2. Extracting multiple scan regions
+        3. Gracefully handling missing values
+        4. Unwinding different scan conventions to common formats
+        5. Handling early scan termination
+        """
+        hdf5 = h5py.File(frame_path, "r")
+
+        constructed_coords, data_dimensions = construct_coords(hdf5)
+
+        data_vars = {}
+
+        for dataset in [hdf5["0D_Data"], hdf5["1D_Data"], hdf5["2D_Data"]]:
+            for data_name in dataset:
+                if data_name in constructed_coords:
+                    continue
+                data = dataset_to_array(
+                    dataset[data_name], type="int32" if "Spectra" in data_name else "float64"
+                )  # Spectra are arrays of counts
+                coord_names = data_dimensions[data_name]
+                data_vars[data_name] = xr.DataArray(
+                    data,
+                    coords={
+                        coord_name: constructed_coords[coord_name] for coord_name in coord_names
+                    },
+                    dims=coord_names,
+                    name=data_name,
+                )
+
+        attrs = get_attrs(hdf5)
+
+        hdf5.close()
+
+        return xr.Dataset(
+            data_vars={
+                f"{name}_safe" if name in constructed_coords else name: data
+                for name, data in data_vars.items()
+            },
+            coords=constructed_coords,
+            attrs=attrs,
+        )
+
+    def postprocess_frame(self, frame: xr.Dataset):
+        frame = super().postprocess_frame(frame)
+
+        deg_to_rad_coords = {"beta", "theta", "psi"}
+        for coord_name in deg_to_rad_coords:
+            for data_type in [frame.coords, frame.attrs]:
+                if coord_name in data_type:
+                    try:
+                        data_type[coord_name] = data_type[coord_name] * (np.pi / 180)
+                    except (TypeError, ValueError):
+                        pass
+
+        return frame
 
 
 class FITSEndstation(SingleFileEndstation):
@@ -471,9 +541,7 @@ class FITSEndstation(SingleFileEndstation):
         "LMOTOR6": "alpha",
     }
 
-    def load_single_frame(
-        self, frame_path: str = None, scan_desc: dict = None, **kwargs
-    ):
+    def load_single_frame(self, frame_path: str = None, scan_desc: dict = None, **kwargs):
         """Loads a scan from a single .fits file.
 
         This assumes the DAQ storage convention set by E. Rotenberg (possibly earlier authors)
@@ -492,19 +560,14 @@ class FITSEndstation(SingleFileEndstation):
         hdulist = fits.open(frame_path, ignore_missing_end=True)
         primary_dataset_name = None
 
-        # J: TODO see if this is necessary. Labview should be fixed to not produce this.
         # Clean the header because sometimes out LabView produces improper FITS files
         for i in range(len(hdulist)):
             # This looks a little stupid, but because of confusing astropy internals actually works
-            hdulist[i].header[
-                "UN_0_0"
-            ] = ""  # TODO This card is broken, this is not a good fix
+            hdulist[i].header["UN_0_0"] = ""  # TODO This card is broken, this is not a good fix
             del hdulist[i].header["UN_0_0"]
             hdulist[i].header["UN_0_0"] = ""
             if "TTYPE2" in hdulist[i].header and hdulist[i].header["TTYPE2"] == "Delay":
-                self.trace(
-                    "Using ps delay units. This looks like an ALG main chamber scan."
-                )
+                self.trace("Using ps delay units. This looks like an ALG main chamber scan.")
                 hdulist[i].header["TUNIT2"] = ""
                 del hdulist[i].header["TUNIT2"]
                 hdulist[i].header["TUNIT2"] = "ps"
@@ -608,15 +671,11 @@ class FITSEndstation(SingleFileEndstation):
 
                 # we also need to adjust the coordinates
                 altered_dimension = dimension_for_column[0]
-                built_coords[altered_dimension] = built_coords[altered_dimension][
-                    :n_slices
-                ]
+                built_coords[altered_dimension] = built_coords[altered_dimension][:n_slices]
 
             data_vars[column_display] = xr.DataArray(
                 resized_data,
-                coords={
-                    k: c for k, c in built_coords.items() if k in dimension_for_column
-                },
+                coords={k: c for k, c in built_coords.items() if k in dimension_for_column},
                 dims=dimension_for_column,
             )
 
@@ -741,9 +800,7 @@ def resolve_endstation(retry=True, **kwargs) -> type:
 
 
 @traceable
-def load_scan(
-    scan_desc: Dict[str, str], retry=True, trace=None, **kwargs: Any
-) -> xr.Dataset:
+def load_scan(scan_desc: Dict[str, str], retry=True, trace=None, **kwargs: Any) -> xr.Dataset:
     """Resolves a plugin and delegates loading a scan.
 
     This is used interally by `load_data` and should not be invoked directly

@@ -8,7 +8,7 @@ import numpy as np
 
 import xarray as xr
 from arpes.endstations import (
-    FITSEndstation,
+    HDF5Endstation,
     HemisphericalEndstation,
     SynchrotronEndstation,
 )
@@ -19,9 +19,7 @@ __all__ = (
 )
 
 
-class MAESTROARPESEndstationBase(
-    SynchrotronEndstation, HemisphericalEndstation, FITSEndstation
-):
+class MAESTROARPESEndstationBase(SynchrotronEndstation, HemisphericalEndstation, HDF5Endstation):
     """Common code for the MAESTRO ARPES endstations at the Advanced Light Source."""
 
     PRINCIPAL_NAME = None  # skip me
@@ -57,8 +55,8 @@ class MAESTROMicroARPESEndstation(MAESTROARPESEndstationBase):
     ALIASES = ["BL7", "BL7.0.2", "ALS-BL7.0.2", "MAESTRO"]
 
     ANALYZER_INFORMATION = {
-        "analyzer": "R4000",
-        "analyzer_name": "Scienta R4000",
+        # "analyzer": "R4000",
+        # "analyzer_name": "Scienta R4000",
         "parallel_deflectors": False,
         "perpendicular_deflectors": True,
         "analyzer_radius": None,
@@ -66,20 +64,24 @@ class MAESTROMicroARPESEndstation(MAESTROARPESEndstationBase):
     }
 
     RENAME_KEYS = {
+        "X": "x",
+        "Y": "y",
+        "Z": "z",
+        "Beta": "beta",
         "LMOTOR0": "x",
         "LMOTOR1": "y",
         "LMOTOR2": "z",
-        "Scan X": "scan_x",
-        "Scan Y": "scan_y",
-        "Scan Z": "scan_z",
         "LMOTOR3": "theta",
         "LMOTOR4": "beta",
         "LMOTOR5": "chi",
         "LMOTOR6": "alpha",
         "LMOTOR9": "psi",
+        "Scan X": "scan_x",
+        "Scan Y": "scan_y",
+        "Scan Z": "scan_z",
         "mono_eV": "hv",
-        "SF_HV": "hv",
-        "SS_HV": "hv",
+        "SF_hv": "hv",
+        "SS_hv": "hv",
         "Slit Defl": "psi",
         "S_Volts": "volts",
         # probably need something like an attribute list for extraction
@@ -94,8 +96,8 @@ class MAESTROMicroARPESEndstation(MAESTROARPESEndstationBase):
         "SFBE0": "eV_prebinning",
         "LWLVNM": "daq_type",
         "pixel": "phi",
-        "Swept_Spectra119": "spectrum",
-        "Fixed_Spectra119": "spectrum",
+        # "Swept_Spectra119": "spectrum",
+        # "Fixed_Spectra119": "spectrum",
     }
 
     ATTR_TRANSFORMS = {
@@ -127,11 +129,20 @@ class MAESTROMicroARPESEndstation(MAESTROARPESEndstationBase):
             "Angular30": 0.181,
             "Angular14": 0.0963,
             "Angular7NF": 0.04264,
-        }[data.attrs["SSLNM0"]]
+        }.get(data.attrs["SSlnm0"], 200)
 
         if "phi" in data.coords:
             data.coords["phi"] = (conversion_factor / 200) * (
                 data.coords["phi"] - data.coords["phi"].mean()
             )
+
+        data_vars = list(data.data_vars.keys())
+        spectra_names = [data_var for data_var in data_vars if "Spectra" in data_var]
+        # J: TODO - figure out a priorty for which spectrum to set as default
+        max_dims = 0
+        for spectrum_name in spectra_names:
+            if n_dims := len(data[spectrum_name].dims) > max_dims:
+                max_dims = n_dims
+                data.attrs["spectrum_name"] = spectrum_name
 
         return data

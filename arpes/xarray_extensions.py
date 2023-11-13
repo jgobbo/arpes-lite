@@ -94,6 +94,8 @@ def _iter_groups(grouped: Dict[str, Any]) -> Iterator[Any]:
 class ARPESAccessorBase:
     """Base class for the xarray extensions in PyARPES."""
 
+    _obj: xr.Dataset
+
     def along(self, directions, **kwargs):
         return slice_along_path(self._obj, directions, **kwargs)
 
@@ -2946,13 +2948,14 @@ class ARPESDatasetAccessor(ARPESAccessorBase):
             Attributes from the parent dataset are assigned onto the selected
             array as a convenience.
         """
-        spectrum = None
-        if "spectrum" in self._obj.data_vars:
-            spectrum = self._obj.spectrum
+        if "spectrum_name" in self._obj.attrs:
+            return self._obj.data_vars[self._obj.attrs["spectrum_name"]]
+        elif "spectrum" in self._obj.data_vars:
+            return self._obj.data_vars["spectrum"]
         elif "raw" in self._obj.data_vars:
-            spectrum = self._obj.raw
+            return self._obj.data_vars["raw"]
         elif "__xarray_dataarray_variable__" in self._obj.data_vars:
-            spectrum = self._obj.__xarray_dataarray_variable__
+            return self._obj.data_vars["__xarray_dataarray_variable__"]
         else:
             candidates = self.spectra
             if candidates:
@@ -2963,11 +2966,10 @@ class ARPESDatasetAccessor(ARPESAccessorBase):
                     if volume > best_volume:
                         spectrum = c
                         best_volume = volume
-
-        if spectrum is not None and "df" not in spectrum.attrs:
-            spectrum.attrs["df"] = self._obj.attrs.get("df", None)
-
-        return spectrum
+                
+                return spectrum
+            
+        raise ValueError("No spectrum found in dataset.")
 
     @property
     def spectra(self) -> List[xr.DataArray]:
