@@ -178,9 +178,11 @@ def slice_along_path(
         return dict(zip([d for d in arr.dims if d in raw_point], S))
 
     parsed_interpolation_points = [
-        x
-        if isinstance(x, collections.Iterable) and not isinstance(x, str)
-        else extract_symmetry_point(x)
+        (
+            x
+            if isinstance(x, collections.Iterable) and not isinstance(x, str)
+            else extract_symmetry_point(x)
+        )
         for x in interpolation_points
     ]
 

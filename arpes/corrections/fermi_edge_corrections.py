@@ -1,10 +1,13 @@
 """Automated utilities for calculating Fermi edge corrections."""
+
 import lmfit as lf
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.ndimage import gaussian_filter
 
 import xarray as xr
-from arpes.fits import GStepBModel, LinearModel, QuadraticModel, broadcast_model
+from arpes.constants import K_BOLTZMANN_EV_KELVIN
+from arpes.fits import GStepBModel, LinearModel, QuadraticModel, AffineBroadenedFD, broadcast_model
 from arpes.provenance import provenance, update_provenance
 from arpes.utilities.math import shift_by
 
@@ -28,6 +31,7 @@ __all__ = (
     "build_direct_fermi_edge_correction",
     "apply_direct_fermi_edge_correction",
     "find_e_fermi_linear_dos",
+    "fix_fermi_edge",
 )
 
 
@@ -271,3 +275,138 @@ def apply_quadratic_fermi_edge_correction(
     )
 
     return corrected_arr
+
+
+# def fd(E, amp, Ef, T):
+#     """
+#     Returns a Fermi-Dirac distribution on the input E values.
+#     Accepts (outputs) E (fermi dirac) as numpy array, xarray DataArray, or xarray DataSet
+#     Ef and E in eV, T in K
+#     """
+#     numerator = E - Ef
+#     denominator = K_BOLTZMANN_EV_KELVIN * T
+
+#     return amp / (np.exp(numerator / denominator) + 1)
+
+
+# def find_fermi_edge(da, guess_Ef=(-0.1, 0.1), bin=5):
+#     """
+#     Description: Identifies Fermi edge from a 2D or 3D E-K spectrum by fitting a Fermi-Dirac distribution to
+#     all EDCs.
+#     Inputs:
+#     - da: (DataArray) 2D or 3D spectrum of E-k or E-kx-ky
+#     - guess_Ef: (tuple of floats) Range of E values to look for Fermi edge
+#     - bin: (int or list/tuple of ints) Number of elements to use as sigma for gaussian blurring in non-E dimensions.
+#     For data with multiple non-E coordinates, an int or sequence of ints can be supplied
+#     Output:
+#     (DataArray) Array with one less dimension than da, with fitted Ef values over momentum coordinates
+#     Beware: Uses fd function to fit to. Needs gaussian_filter to be imported from scipy.ndimage
+#     """
+
+#     # Start with fermi edge fitting using FD distribution
+
+#     sig = np.concatenate(([0], np.ones(len(da.dims) - 1) * bin))
+
+#     # blur in momentum direction for smoother fermi edge
+
+#     data = da.sel(eV=slice(*guess_Ef)).copy(
+#         data=gaussian_filter(da.sel(eV=slice(*guess_Ef)), sigma=sig), deep=True
+#     )
+
+#     guess_params = {"amp": np.mean(data.values) * 2, "Ef": np.mean(guess_Ef), "T": 50}
+
+#     fit = data.curvefit("eV", fd, p0=guess_params, bounds={"T": (1, 500)})
+
+#     return fit["curvefit_coefficients"].sel(param="Ef")
+
+
+# def fermi_edge_correction(da, fermi_edge):
+#     """
+#     Shifts band structure (E-K plot) along E axis by momentum-dependent amount. If shift amount is chosen as
+#     the fermi edge energies, this function outputs the spectrum with corrected fermi edge shape.
+#     Inputs:
+#     - da: (DataArray) Array containing uncorrected 2D or 3D band structure data (E-k or E-kx-ky).
+#     - fermi_edge: (DataArray) Array of one less dimension than da, with values equal to fermi edge energies
+#     in da, with identical non-E coordinates. For 3D da, if a 1D fermi_edge is supplied the function will
+#     copy the 1D fermi_edge over the remaining coordinate.
+#     Output: DataArray identical to input, but with each EDC shifted by amounts given by
+#     fermi_edge-np.max(fermi_edge). If fermi_edge is the uncorrected fermi level, the output is a spectrum
+#     with fermi level equal to the peak of the uncorrected fermi edge, independent of all non-E coordinates.
+#     Beware: assumes eV is the first dimension in da.
+#     """
+
+#     eVrange = np.abs(da["eV"][-1].values - da["eV"][0].values)
+
+#     idxshift = np.outer(
+#         np.ones(len(da["eV"])),
+#         (fermi_edge - np.max(fermi_edge)).values * len(da["eV"]) / eVrange,
+#     )
+
+#     da_ft = np.fft.fft(da.data, axis=0)
+
+#     if len(da.dims) == 2:
+#         ones_mat = np.ones(len(da[da.dims[1]]))
+
+#     else:
+#         if len(da.dims) == 3:
+#             ones_mat = np.ones((len(da[da.dims[1]]), len(da[da.dims[2]])))
+
+#             idxshift = np.outer(idxshift, np.ones(len(da[da.dims[2]])))
+
+#     exp_mat = np.exp(
+#         -1j * 2 * np.pi * np.multiply.outer(np.arange(len(da["eV"])), ones_mat) / len(da["eV"])
+#     )
+
+#     return da.copy(data=np.real(np.fft.ifft(exp_mat ** (-idxshift) * da_ft, axis=0)), deep=True)
+
+
+# def fast_fix_one_fermi_edge(cut: xr.DataArray):
+#     edge = find_fermi_edge(cut)
+#     return fermi_edge_correction(cut, edge)
+
+
+def fix_one_fermi_edge(cut: xr.DataArray, edge_fit=None):
+    edge_fit = edge_fit if edge_fit is not None else fit_fermi_edge(cut)
+    return cut.G.shift_by(edge_fit, "eV")
+
+
+def fit_fermi_edge(cut: xr.DataArray):
+    edge_region = cut.sel(eV=slice(-0.1, 0.1))
+
+    edge_fits = broadcast_model(AffineBroadenedFD, edge_region, "phi", progress=False)
+    quad_fit = QuadraticModel().guess_fit(edge_fits.F.p("fd_center"))
+    return quad_fit.eval(x=edge_region["phi"])
+
+
+def fix_fermi_edge(ds: xr.Dataset, broadcast_fit: bool = True) -> xr.Dataset:
+    """
+    Automatically corrects the Fermi edge in a dataset. Each spectrum in a scan is corrected independently.
+    By default, the spectra are summed along all scan axes to get a single Fermi edge fit, which is then broadcast to
+    all spectra. Each spectrum can be fit independently by setting broadcast_fit to False.
+
+    Args:
+        ds: The dataset to correct
+        broadcast_fit: Whether to fit the Fermi edge of the summed spectrum and then broadcast to all spectra.
+
+    Returns:
+        A new dataset with the Fermi edge corrected.
+    """
+    ds = ds.copy(deep=True)
+    spectrum = ds.S.spectrum
+
+    # Moving the Fermi edge to 0
+    integrated_edc = spectrum.sum([dim for dim in spectrum.dims if dim != "eV"])
+    dropoff_index = np.argmin(np.diff(integrated_edc))
+    zero_index = np.argmin(np.abs(spectrum["eV"].values))
+    spectrum = spectrum.shift(eV=zero_index - dropoff_index)
+
+    scan_axes = [dim for dim in spectrum.dims if dim not in {"eV", "phi"}]
+    stacked = spectrum.stack(flattened=scan_axes)
+
+    edge_fit = fit_fermi_edge(stacked.sum("flattened")) if broadcast_fit is True else None
+
+    fixed_cuts = [fix_one_fermi_edge(cut, edge_fit) for cut in stacked.transpose("flattened", ...)]
+    fixed_stack = xr.concat(fixed_cuts, dim="flattened")
+    stacked.values = fixed_stack.transpose(*stacked.dims)
+
+    return ds.update({ds.S.spectrum_name: stacked.unstack("flattened")})

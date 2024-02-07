@@ -2925,6 +2925,19 @@ class ARPESDatasetAccessor(ARPESAccessorBase):
             return False
 
     @property
+    def spectrum_name(self) -> str:
+        if "spectrum_name" in self._obj.attrs:
+            return self._obj.attrs["spectrum_name"]
+        elif "spectrum" in self._obj.data_vars:
+            return "spectrum"
+        elif "raw" in self._obj.data_vars:
+            return "raw"
+        elif "__xarray_dataarray_variable__" in self._obj.data_vars:
+            return "__xarray_dataarray_variable__"
+            
+        raise ValueError("No spectrum name found in dataset.") 
+
+    @property
     def spectrum(self) -> Optional[xr.DataArray]:
         """Isolates a single spectrum from a dataset.
 
@@ -2948,15 +2961,9 @@ class ARPESDatasetAccessor(ARPESAccessorBase):
             Attributes from the parent dataset are assigned onto the selected
             array as a convenience.
         """
-        if "spectrum_name" in self._obj.attrs:
-            return self._obj.data_vars[self._obj.attrs["spectrum_name"]]
-        elif "spectrum" in self._obj.data_vars:
-            return self._obj.data_vars["spectrum"]
-        elif "raw" in self._obj.data_vars:
-            return self._obj.data_vars["raw"]
-        elif "__xarray_dataarray_variable__" in self._obj.data_vars:
-            return self._obj.data_vars["__xarray_dataarray_variable__"]
-        else:
+        try:
+            return self._obj.data_vars[self.spectrum_name]
+        except ValueError:
             candidates = self.spectra
             if candidates:
                 spectrum = candidates[0]

@@ -196,6 +196,40 @@ def stitch(
     return concatenated
 
 
+def export_dataset(dataset: xr.Dataset, path: Union[str, Path]):
+    """
+    Corrects bad keys/values and then exports dataset to netcdf.
+    Note that all values that are not strings, ints, or floats are converted to strings.
+
+    Args:
+        dataset: The dataset to export
+        path: The path to export to
+    """
+    dataset = dataset.copy(deep=True)
+
+    fixed_values = {}
+    bad_keys = []
+    for key, value in dataset.attrs.items():
+        if not isinstance(value, (str, int, float)) or isinstance(value, bool):
+            fixed_values[key] = str(value)
+        if "/" in key:
+            bad_keys.append(key)
+    for key in fixed_values:
+        dataset.attrs[key] = fixed_values[key]
+    for key in bad_keys:
+        dataset.attrs[key.replace("/", " per ")] = dataset.attrs.pop(key)
+
+    if path.suffix != ".nc":
+        warnings.warn(
+            "The path provided does not have a .nc extension. Adding one and continuing..."
+        )
+        path = path.parent / f"{path.name}.nc"
+    dataset.to_netcdf(path)
+
+
+# TODO: J: add an import dataset function which converts bools/Nones back to their original types
+
+
 def file_for_pickle(name):
     here = Path(".")
 
