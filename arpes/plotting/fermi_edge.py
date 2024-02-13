@@ -1,4 +1,5 @@
 """Simple plotting routines related to Fermi edges and Fermi edge fits."""
+
 import math
 import warnings
 
@@ -112,10 +113,10 @@ def fermi_edge_reference(data, title=None, ax=None, out=None, norm=None, **kwarg
         return
 
     centers = apply_dataarray(
-        edge_fit, np.vectorize(lambda x: x.params["center"].value, otypes=[np.float])
+        edge_fit, np.vectorize(lambda x: x.params["center"].value, otypes=[float])
     )
     widths = apply_dataarray(
-        edge_fit, np.vectorize(lambda x: x.params["width"].value, otypes=[np.float])
+        edge_fit, np.vectorize(lambda x: x.params["width"].value, otypes=[float])
     )
 
     if ax is None:
