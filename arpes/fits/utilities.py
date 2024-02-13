@@ -160,7 +160,7 @@ def broadcast_model(
 
     other_axes = set(data.dims).difference(set(broadcast_dims))
     template = data.sum(list(other_axes))
-    template.values = np.ndarray(template.shape, dtype=np.object)
+    template.values = np.ndarray(template.shape, dtype=object)
     n_fits = np.prod(np.array(list(template.S.dshape.values())))
 
     if parallelize is None:
@@ -192,7 +192,7 @@ def broadcast_model(
     if parallelize:
         trace(f"Running fits (nfits={n_fits}) in parallel (n_threads={os.cpu_count()})")
 
-        print("Running on multiprocessing pool... this may take a while the first time.")
+        # print("Running on multiprocessing pool... this may take a while the first time.")
         from .hot_pool import hot_pool
 
         pool = hot_pool.pool
@@ -211,7 +211,7 @@ def broadcast_model(
 
     if serialize:
         trace("Deserializing...")
-        print("Deserializing...")
+        # print("Deserializing...")
 
         def unwrap(result_data):
             # using the lmfit deserialization and serialization seems slower than double pickling with dill
@@ -220,7 +220,7 @@ def broadcast_model(
             return dill.loads(result_data)
 
         exe_results = [(unwrap(res), residual, cs) for res, residual, cs in exe_results]
-        print("Finished deserializing")
+        # print("Finished deserializing")
 
     trace(f"Finished running fits Collating")
     for fit_result, fit_residual, coords in exe_results:
