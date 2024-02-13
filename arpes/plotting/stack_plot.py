@@ -2,10 +2,11 @@
 
 Think the album art for "Unknown Pleasures".
 """
+
 import matplotlib.colors
 import matplotlib.pyplot as plt
 import numpy as np
-from math import ceil
+from math import ceil, inf
 from matplotlib import cm
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
@@ -56,9 +57,7 @@ def offset_scatter_plot(
     if len(data.data_vars[name_to_plot].dims) != 2:
         raise ValueError(
             "In order to produce a stack plot, data must be image-like."
-            "Passed data included dimensions: {}".format(
-                data.data_vars[name_to_plot].dims
-            )
+            "Passed data included dimensions: {}".format(data.data_vars[name_to_plot].dims)
         )
 
     fig = None
@@ -266,65 +265,70 @@ def flat_stack_plot(
 
 @save_plot_provenance
 def stack_dispersion_plot(
-    data: DataType, stack_axis: str = None, data_scaling: float = 1, **kwargs
+    dataset: xr.Dataset, stack_axis: str = None, data_scaling: float = 2.0, **kwargs
 ):
     """
     Generates a stack plot of a 2D dataset along the specified stack_axis.
-    Each cut is normalized and scaled to fit within the minimum cut offset multiplied by data_scaling.
-    """
+    Each cut is normalized and scaled to fit within the average cut offset multiplied by data_scaling.
 
-    if len(data.dims) != 2:
-        raise ValueError(f"Data must be 2D, not {data.dims}")
-    axes = list(data.dims.keys())
-    stack_axis = list(data.dims.keys())[0] if stack_axis is None else stack_axis
+    Args:
+        dataset: dataset to plot
+        stack_axis: axis to stack along (defaults to the zeroth axis if not specified)
+        data_scaling: scaling factor for the data
+
+    Returns:
+        fig, ax: figure and axis of the plot
+    """
+    spectrum: xr.DataArray = dataset.S.spectrum
+
+    axes = list(spectrum.dims)
+    if len(axes) != 2:
+        raise ValueError(f"Spectrum must be 2D, but has dimensions {spectrum.dims}")
+    stack_axis = axes[0] if stack_axis is None else stack_axis
     try:
         axes.remove(stack_axis)
     except ValueError:
-        raise ValueError(
-            f"stack_axis, {stack_axis}, is not one of the data's axes: {axes}"
-        )
+        raise ValueError(f"stack_axis, {stack_axis}, is not one of the data's axes: {axes}")
     plot_axis = axes[0]
 
-    max_stacks = kwargs.get("max_stacks", 20)
-    if max_stacks < data.dims[stack_axis]:
+    spectrum = spectrum.sortby(stack_axis)
+    max_stacks = kwargs.get("max_stacks", 15)
+    if max_stacks < len(spectrum.coords[stack_axis]):
         stack_data = rebin(
-            data, reduction={stack_axis: ceil(data.dims[stack_axis] / max_stacks)}
+            spectrum, reduction={stack_axis: ceil(dataset.dims[stack_axis] / max_stacks)}
         )
     else:
-        stack_data = data.copy()
-    # need to look at how coords are rebinned
+        stack_data = spectrum.copy(deep=True)
+
     cut_values = stack_data.coords[stack_axis].values
     x = stack_data.coords[plot_axis].values
 
     def normalize_to_max(y: np.ndarray, max: float):
         return (y - y.min()) / max
 
-    spectrum = normalize_to_spectrum(stack_data)
-    ys: list[np.ndarray]
-    ys = [values for values in spectrum.transpose(stack_axis, ...).values]
-    max_height = max([y.max() - y.min() for y in ys])
-    ys = [normalize_to_max(y, max_height) for y in ys]
+    raw_ys: list[np.ndarray] = [
+        y_values for y_values in stack_data.transpose(stack_axis, ...).values
+    ]
+    max_height = max([y.max() - y.min() for y in raw_ys])
+    normalized_ys = [normalize_to_max(y, max_height) for y in raw_ys]
 
-    min_cut_offset = 1e9
-    for i in range(len(cut_values) - 1):
-        min_cut_offset = min(min_cut_offset, abs(cut_values[i] - cut_values[i + 1]))
-
-    for i, cut_value in enumerate(cut_values):
-        ys[i] = ys[i] * data_scaling * min_cut_offset + cut_value
+    average_cut_offset = np.mean(np.diff(cut_values))
+    average_y_intercept = np.mean([y[0] for y in normalized_ys])
+    scaled_ys = np.array(
+        [
+            ((y - average_y_intercept) * data_scaling * average_cut_offset) + cut_value
+            for y, cut_value in zip(normalized_ys, cut_values)
+        ]
+    )
 
     ax: plt.Axes = kwargs.get("ax", None)
     if ax is None:
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
+    ax.plot(x, scaled_ys.transpose(), color=kwargs.get("color", "black"))
 
-    for y in ys:
-        ax.plot(x, y, color=kwargs.get("color", "black"))
-
-    if kwargs.get("show_baseline", False):
-        x_lims = ax.get_xlim()
-        ax.hlines([y.min() for y in ys], *x_lims, linestyles="dashed", color="black")
-        ax.set_xlim(*x_lims)
+    ax.set_xlim(x.min(), x.max())
     ax.set_xlabel(plot_axis)
     ax.set_ylabel(stack_axis)
 
@@ -361,9 +365,7 @@ def overlapped_stack_dispersion_plot(
     if len(stack_coord.values) > max_stacks:
         data = rebin(
             data,
-            reduction=dict(
-                [[stack_axis, int(np.ceil(len(stack_coord.values) / max_stacks))]]
-            ),
+            reduction=dict([[stack_axis, int(np.ceil(len(stack_coord.values) / max_stacks))]]),
         )
 
     fig = None
@@ -398,9 +400,7 @@ def overlapped_stack_dispersion_plot(
         scale_factor = 0.02 * (np.max(cvalues) - np.min(cvalues)) / maximum_deviation
 
     iteration_order = -1  # might need to fiddle with this in certain cases
-    for coord_dict, marginal in list(data.G.iterate_axis(stack_axis))[
-        ::iteration_order
-    ]:
+    for coord_dict, marginal in list(data.G.iterate_axis(stack_axis))[::iteration_order]:
         coord_value = coord_dict[stack_axis]
 
         xs = cvalues
@@ -413,9 +413,7 @@ def overlapped_stack_dispersion_plot(
         else:
             true_ys = (
                 marginal_values
-                - np.linspace(
-                    marginal_offset, right_marginal_offset, len(marginal_values)
-                )
+                - np.linspace(marginal_offset, right_marginal_offset, len(marginal_values))
             ) / max_over_stacks
             ys = scale_factor * true_ys + coord_value
 

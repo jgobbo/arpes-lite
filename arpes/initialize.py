@@ -5,6 +5,7 @@ import xarray as xr
 
 from arpes.io import load_data, export_dataset
 from arpes.plotting.qt_ktool import ktool
+from arpes.plotting.stack_plot import stack_dispersion_plot
 from arpes.utilities.conversion import convert_to_kspace
 from arpes.corrections import fix_fermi_edge
 

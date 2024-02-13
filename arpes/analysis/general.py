@@ -1,4 +1,5 @@
 """Some general purpose analysis routines otherwise defying categorization."""
+
 import itertools
 from collections import defaultdict
 
@@ -173,7 +174,7 @@ def rebin(
     split the data into chunks that are integrated over. An interpolation option is also
     available.
 
-    Exactly one of ``shape`` and ``reduction`` should be supplied.
+    Exactly one of ``shape`` or ``reduction`` should be supplied.
 
     Dimensions corresponding to missing entries in ``shape`` or ``reduction`` will not
     be changed.
