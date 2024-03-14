@@ -1,10 +1,12 @@
 """Infrastructure code for Qt based analysis tools."""
+
 from arpes.typing import xr_types
 import pyqtgraph as pg
 from pyqtgraph import ViewBox
 import functools
 from multiprocessing import Process
 import dill
+from math import ceil
 
 from typing import Callable
 
@@ -123,9 +125,12 @@ class QtInfo:
             arg,
             (int, float),
         ):
-            return self.screen_dpi * arg
+            return self._inches_to_px(arg)
 
-        return map(lambda x: x * self.screen_dpi, arg)
+        return map(self._inches_to_px, arg)
+
+    def _inches_to_px(self, length: int | float) -> int:
+        return ceil(self.screen_dpi * length)
 
     def setup_pyqtgraph(self):
         """Does any patching required on PyQtGraph and configures options."""
@@ -134,7 +139,9 @@ class QtInfo:
 
         self._pg_patched = True
 
-        pg.setConfigOptions(antialias=True, foreground=(0, 0, 0), background=(255, 255, 255))
+        pg.setConfigOptions(
+            antialias=True, foreground=(0, 0, 0), background=(255, 255, 255)
+        )
 
         def patchedLinkedViewChanged(self, view, axis):
             """Patches linkedViewChanged to fix a pixel scaling bug.
