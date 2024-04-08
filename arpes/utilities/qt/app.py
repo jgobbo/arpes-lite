@@ -1,4 +1,5 @@
 """Application infrastructure for apps/tools which browse a data volume."""
+
 from PyQt5 import QtWidgets
 import pyqtgraph as pg
 import numpy as np
@@ -24,12 +25,12 @@ class SimpleApp:
     WINDOW_SIZE = (4, 4)
     TITLE = "Untitled Tool"
 
-    _data = None
+    _data: xr.Dataset = None
+    spectrum: xr.DataArray = None
 
     def __init__(self):
         """Only interesting thing on init is to make a copy of the user settings."""
         self._ninety_eight_percentile = None
-        self._data = None
         self.settings = None
         self._window = None
         self._layout = None
@@ -38,7 +39,9 @@ class SimpleApp:
 
         self.views = {}
         self.reactive_views = []
-        self.registered_cursors: typing.Dict[typing.List[CursorRegion]] = defaultdict(list)
+        self.registered_cursors: typing.Dict[typing.List[CursorRegion]] = defaultdict(
+            list
+        )
 
         self.settings = arpes.config.SETTINGS.copy()
 
@@ -57,7 +60,7 @@ class SimpleApp:
             print(pprint.pformat(value))
 
     @property
-    def data(self) -> xr.DataArray:
+    def data(self) -> xr.Dataset:
         """Read data from the cached attribute.
 
         This is a propety as opposed to a plain attribute
@@ -67,8 +70,9 @@ class SimpleApp:
         return self._data
 
     @data.setter
-    def data(self, new_data: xr.DataArray):
+    def data(self, new_data: xr.Dataset):
         self._data = new_data
+        self.spectrum = new_data.S.spectrum if new_data is not None else None
 
     def close(self):
         """Graceful shutdown. Tell each view to close and drop references so GC happens."""
@@ -84,7 +88,7 @@ class SimpleApp:
         if self._ninety_eight_percentile is not None:
             return self._ninety_eight_percentile
 
-        self._ninety_eight_percentile = np.percentile(self.data.values, (98,))[0]
+        self._ninety_eight_percentile = np.percentile(self.spectrum.values, 98)
         return self._ninety_eight_percentile
 
     def print(self, *args, **kwargs):
@@ -104,9 +108,13 @@ class SimpleApp:
 
         # need to scale colors if pyqtgraph is older.
         if pg.__version__.split(".")[1] != "10":
-            sampled_colormap = sampled_colormap * 255  # super frustrating undocumented change
+            sampled_colormap = (
+                sampled_colormap * 255
+            )  # super frustrating undocumented change
 
-        return pg.ColorMap(pos=np.linspace(0, 1, len(sampled_colormap)), color=sampled_colormap)
+        return pg.ColorMap(
+            pos=np.linspace(0, 1, len(sampled_colormap)), color=sampled_colormap
+        )
 
     def set_colormap(self, colormap):
         """Finds all `DataArrayImageView` instances and sets their color palette."""
@@ -116,7 +124,7 @@ class SimpleApp:
             colormap = matplotlib.cm.get_cmap(colormap)
 
         cmap = self.build_pg_cmap(colormap)
-        for view_name, view in self.views.items():
+        for view in self.views.values():
             if isinstance(view, DataArrayImageView):
                 view.setColorMap(cmap)
 
@@ -137,10 +145,14 @@ class SimpleApp:
         if layout is None:
             layout = self._layout
 
-        remaining_dims = [l for l in list(range(len(self.data.dims))) if l not in dimensions]
+        remaining_dims = [
+            l for l in list(range(len(self.data.dims))) if l not in dimensions
+        ]
 
         if len(remaining_dims) == 1:
-            widget = DataArrayPlot(name=name, root=weakref.ref(self), orientation=orientation)
+            widget = DataArrayPlot(
+                name=name, root=weakref.ref(self), orientation=orientation
+            )
             self.views[name] = widget
 
             if orientation == PlotOrientation.Horizontal:
@@ -150,9 +162,11 @@ class SimpleApp:
 
             if cursors:
                 cursor = CursorRegion(
-                    orientation=CursorRegion.Horizontal
-                    if orientation == PlotOrientation.Vertical
-                    else CursorRegion.Vertical,
+                    orientation=(
+                        CursorRegion.Horizontal
+                        if orientation == PlotOrientation.Vertical
+                        else CursorRegion.Vertical
+                    ),
                     movable=True,
                 )
                 widget.addItem(cursor, ignoreBounds=False)
@@ -167,8 +181,12 @@ class SimpleApp:
             widget.setLevels(0.05, 0.95)
 
             if cursors:
-                cursor_vert = CursorRegion(orientation=CursorRegion.Vertical, movable=True)
-                cursor_horiz = CursorRegion(orientation=CursorRegion.Horizontal, movable=True)
+                cursor_vert = CursorRegion(
+                    orientation=CursorRegion.Vertical, movable=True
+                )
+                cursor_horiz = CursorRegion(
+                    orientation=CursorRegion.Horizontal, movable=True
+                )
                 widget.addItem(cursor_vert, ignoreBounds=True)
                 widget.addItem(cursor_horiz, ignoreBounds=True)
                 self.connect_cursor(remaining_dims[0], cursor_vert)

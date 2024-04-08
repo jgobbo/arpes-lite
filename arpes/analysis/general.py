@@ -49,7 +49,9 @@ def fit_fermi_edge(data, energy_range=None):
     broadcast_directions.remove("eV")
     assert len(broadcast_directions) == 1  # for now we don't support more
 
-    edge_fit = broadcast_model(GStepBModel, data.sel(eV=energy_range), broadcast_directions[0])
+    edge_fit = broadcast_model(
+        GStepBModel, data.sel(eV=energy_range), broadcast_directions[0]
+    )
     return edge_fit
 
 
@@ -88,7 +90,9 @@ def normalize_by_fermi_distribution(
             total_broadening / arpes.constants.K_BOLTZMANN_EV_KELVIN,
         )
     else:
-        distrib = fermi_distribution(data.coords["eV"].values - rigid_shift, data.S.temp)
+        distrib = fermi_distribution(
+            data.coords["eV"].values - rigid_shift, data.S.temp
+        )
 
     # don't boost by more than 90th percentile of input, by default
     if max_gain is None:
@@ -98,7 +102,9 @@ def normalize_by_fermi_distribution(
     distrib_arr = xr.DataArray(distrib, {"eV": data.coords["eV"].values}, ["eV"])
 
     if instrumental_broadening is not None:
-        distrib_arr = gaussian_filter_arr(distrib_arr, sigma={"eV": instrumental_broadening})
+        distrib_arr = gaussian_filter_arr(
+            distrib_arr, sigma={"eV": instrumental_broadening}
+        )
 
     return data / distrib_arr
 
@@ -121,7 +127,9 @@ def symmetrize_axis(data, axis_name, flip_axes=None, shift_axis=True):
         Data after symmetrization procedure.
     """
     data = data.copy(deep=True)  # slow but make sure we don't bork axis on original
-    data.coords[axis_name].values = data.coords[axis_name].values - data.coords[axis_name].values[0]
+    data.coords[axis_name].values = (
+        data.coords[axis_name].values - data.coords[axis_name].values[0]
+    )
 
     selector = {}
     selector[axis_name] = slice(None, None, -1)
@@ -160,6 +168,7 @@ def condense(data: xr.DataArray):
     return data
 
 
+# J: TODO - rebin coordinates instead of simply taking the nth element
 @update_provenance("Rebinned array")
 def rebin(
     data: DataType,
@@ -191,7 +200,11 @@ def rebin(
     if isinstance(data, xr.Dataset):
         new_vars = {
             datavar: rebin(
-                data[datavar], shape=shape, reduction=reduction, interpolate=interpolate, **kwargs
+                data[datavar],
+                shape=shape,
+                reduction=reduction,
+                interpolate=interpolate,
+                **kwargs
             )
             for datavar in data.data_vars
         }
@@ -246,7 +259,9 @@ def rebin(
     for i in range(len(data.dims)):
         reduced_data = reduced_data.mean(i + 1)
 
-    reduced_coords = {d: coord[:: reduction.get(d, 1)] for d, coord in trimmed_coords.items()}
+    reduced_coords = {
+        d: coord[:: reduction.get(d, 1)] for d, coord in trimmed_coords.items()
+    }
     reduced_coords.update(
         {c: data.coords[c] for c in data.coords.keys() if c not in trimmed_coords}
     )

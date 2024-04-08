@@ -68,7 +68,8 @@ def grid_interpolator_from_dataarray(
         values = np.flip(values, arr.dims.index(dim))
 
     interp_points = [
-        arr.coords[d].values[::-1] if d in flip_axes else arr.coords[d].values for d in arr.dims
+        arr.coords[d].values[::-1] if d in flip_axes else arr.coords[d].values
+        for d in arr.dims
     ]
     trace_size = [len(pts) for pts in interp_points]
 
@@ -199,7 +200,9 @@ def slice_along_path(
             if coord not in point:
                 if len(values) != 1:
                     raise ValueError(
-                        "Ambiguous interpolation waypoint broadcast at dimension {}".format(coord)
+                        "Ambiguous interpolation waypoint broadcast at dimension {}".format(
+                            coord
+                        )
                     )
                 else:
                     point[coord] = list(values)[0]
@@ -219,7 +222,9 @@ def slice_along_path(
     converted_coordinates = None
     converted_dims = free_coordinates + [axis_name]
 
-    path_segments = list(zip(parsed_interpolation_points, parsed_interpolation_points[1:]))
+    path_segments = list(
+        zip(parsed_interpolation_points, parsed_interpolation_points[1:])
+    )
 
     def element_distance(waypoint_a, waypoint_b):
         delta = np.array([waypoint_a[k] - waypoint_b[k] for k in waypoint_a.keys()])
@@ -229,7 +234,9 @@ def slice_along_path(
         ks = waypoint_a.keys()
         dist = element_distance(waypoint_a, waypoint_b)
         delta = np.array([waypoint_a[k] - waypoint_b[k] for k in ks])
-        delta_idx = [abs(d / (arr.coords[k][1] - arr.coords[k][0])) for d, k in zip(delta, ks)]
+        delta_idx = [
+            abs(d / (arr.coords[k][1] - arr.coords[k][0])) for d, k in zip(delta, ks)
+        ]
         return dist / np.max(delta_idx)
 
     # Approximate how many points we should use
@@ -242,7 +249,9 @@ def slice_along_path(
 
     if resolution is None:
         if n_points is None:
-            resolution = np.min([required_sampling_density(*segment) for segment in path_segments])
+            resolution = np.min(
+                [required_sampling_density(*segment) for segment in path_segments]
+            )
         else:
             path_length / n_points
 
@@ -294,13 +303,18 @@ def slice_along_path(
         converted_coordinates,
         {
             "dims": converted_dims,
-            "transforms": dict(zip(arr.dims, [converter_for_coordinate_name(d) for d in arr.dims])),
+            "transforms": dict(
+                zip(arr.dims, [converter_for_coordinate_name(d) for d in arr.dims])
+            ),
         },
         as_dataset=True,
     )
 
     if axis_name in arr.dims and len(parsed_interpolation_points) == 2:
-        if parsed_interpolation_points[1][axis_name] < parsed_interpolation_points[0][axis_name]:
+        if (
+            parsed_interpolation_points[1][axis_name]
+            < parsed_interpolation_points[0][axis_name]
+        ):
             # swap the sign on this axis as a convenience to the caller
             converted_ds.coords[axis_name].data = -converted_ds.coords[axis_name].data
 
@@ -388,7 +402,6 @@ def convert_to_kspace(
     """
     if coords is None:
         coords = {}
-
     coords.update(kwargs)
 
     trace("Normalizing to spectrum")
@@ -455,7 +468,9 @@ def convert_to_kspace(
     # temporarily reassign coordinates for dimensions we will not
     # convert to "index-like" dimensions
     restore_index_like_coordinates = {r: dataset.coords[r].values for r in removed}
-    new_index_like_coordinates = {r: np.arange(len(dataset.coords[r].values)) for r in removed}
+    new_index_like_coordinates = {
+        r: np.arange(len(dataset.coords[r].values)) for r in removed
+    }
     dataset = dataset.assign_coords(**new_index_like_coordinates)
 
     if not old_dims:
@@ -480,7 +495,9 @@ def convert_to_kspace(
     )
 
     trace("Converting coordinates")
-    converted_coordinates = converter.get_coordinates(resolution=resolution, bounds=bounds)
+    converted_coordinates = converter.get_coordinates(
+        resolution=resolution, bounds=bounds
+    )
 
     if not set(coords.keys()).issubset(converted_coordinates.keys()):
         extra = set(coords.keys()).difference(converted_coordinates.keys())
@@ -525,7 +542,9 @@ def convert_coordinates(
 
     # Skip the Jacobian correction for now
     # Convert the raw coordinate axes to a set of gridded points
-    trace(f"Calling meshgrid: {[len(target_coordinates[d]) for d in coordinate_transform['dims']]}")
+    trace(
+        f"Calling meshgrid: {[len(target_coordinates[d]) for d in coordinate_transform['dims']]}"
+    )
     meshed_coordinates = np.meshgrid(
         *[target_coordinates[dim] for dim in coordinate_transform["dims"]],
         indexing="ij",
@@ -539,7 +558,9 @@ def convert_coordinates(
         except ValueError:
             pass
 
-    ordered_transformations = [coordinate_transform["transforms"][dim] for dim in ds.dims]
+    ordered_transformations = [
+        coordinate_transform["transforms"][dim] for dim in ds.dims
+    ]
     trace("Calling grid interpolator")
 
     trace("Pulling back coordinates")
@@ -567,7 +588,9 @@ def convert_coordinates(
             return True
 
     trace("Bundling into DataArray")
-    target_coordinates = {k: v for k, v in target_coordinates.items() if acceptable_coordinate(v)}
+    target_coordinates = {
+        k: v for k, v in target_coordinates.items() if acceptable_coordinate(v)
+    }
 
     converted_spectrum = np.reshape(
         converted_volume,
@@ -575,7 +598,9 @@ def convert_coordinates(
         order="C",
     )
     spectrum_name = ds.S.spectrum.name
-    spectrum = xr.DataArray(converted_spectrum, target_coordinates, coordinate_transform["dims"])
+    spectrum = xr.DataArray(
+        converted_spectrum, target_coordinates, coordinate_transform["dims"]
+    )
     ds = ds.drop_vars(spectrum_name)
     ds = ds.assign({spectrum_name: spectrum})
 

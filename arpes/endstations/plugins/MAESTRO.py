@@ -4,9 +4,11 @@ Common code is provided by a base class reflecting DAQ similarities between micr
 at MAESTRO. This is subclassed for the individual experiments to handle some subtle differences
 in how nanoARPES handles its spatial coordiantes (they are hierarchical) and in the spectrometers.
 """
-import numpy as np
 
+from typing import override
+import numpy as np
 import xarray as xr
+
 from arpes.endstations import (
     HDF5Endstation,
     HemisphericalEndstation,
@@ -19,7 +21,9 @@ __all__ = (
 )
 
 
-class MAESTROARPESEndstationBase(SynchrotronEndstation, HemisphericalEndstation, HDF5Endstation):
+class MAESTROARPESEndstationBase(
+    SynchrotronEndstation, HemisphericalEndstation, HDF5Endstation
+):
     """Common code for the MAESTRO ARPES endstations at the Advanced Light Source."""
 
     PRINCIPAL_NAME = None  # skip me
@@ -96,16 +100,14 @@ class MAESTROMicroARPESEndstation(MAESTROARPESEndstationBase):
         "SFBE0": "eV_prebinning",
         "LWLVNM": "daq_type",
         "pixel": "phi",
-        # "Swept_Spectra119": "spectrum",
-        # "Fixed_Spectra119": "spectrum",
     }
 
     ATTR_TRANSFORMS = {
-        "START_T": lambda l: {
+        "Start_t": lambda l: {
             "time": " ".join(l.split(" ")[1:]).lower(),
             "date": l.split(" ")[0],
         },
-        "SF_SLITN": lambda l: {
+        "SS_ESlitN": lambda l: {
             "slit_number": int(l.split(" ")[0]),
             "slit_shape": l.split(" ")[-1].lower(),
             "slit_width": float(l.split(" ")[2]),
@@ -121,7 +123,7 @@ class MAESTROMicroARPESEndstation(MAESTROARPESEndstationBase):
         "undulator_polarization": None,
     }
 
-    # @override py3.12
+    @override
     def postprocess_scan(self, data: xr.Dataset, scan_desc: dict = None):
         data = super().postprocess_scan(data, scan_desc)
 

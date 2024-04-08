@@ -7,7 +7,13 @@ from scipy.ndimage import gaussian_filter
 
 import xarray as xr
 from arpes.constants import K_BOLTZMANN_EV_KELVIN
-from arpes.fits import GStepBModel, LinearModel, QuadraticModel, AffineBroadenedFD, broadcast_model
+from arpes.fits import (
+    GStepBModel,
+    LinearModel,
+    QuadraticModel,
+    AffineBroadenedFD,
+    broadcast_model,
+)
 from arpes.provenance import provenance, update_provenance
 from arpes.utilities.math import shift_by
 
@@ -70,7 +76,9 @@ def find_e_fermi_linear_dos(edc, guess=None, plot=False, ax=None):
     return chemical_potential
 
 
-def apply_direct_fermi_edge_correction(arr: xr.DataArray, correction=None, *args, **kwargs):
+def apply_direct_fermi_edge_correction(
+    arr: xr.DataArray, correction=None, *args, **kwargs
+):
     """Applies a direct fermi edge correction stencil."""
     if correction is None:
         correction = build_direct_fermi_edge_correction(arr, *args, **kwargs)
@@ -83,7 +91,9 @@ def apply_direct_fermi_edge_correction(arr: xr.DataArray, correction=None, *args
     correction_axis = list(arr.dims).index(correction.dims[0])
 
     corrected_arr = xr.DataArray(
-        shift_by(arr.values, shift_amount, axis=energy_axis, by_axis=correction_axis, order=1),
+        shift_by(
+            arr.values, shift_amount, axis=energy_axis, by_axis=correction_axis, order=1
+        ),
         arr.coords,
         arr.dims,
         attrs=arr.attrs,
@@ -99,7 +109,9 @@ def apply_direct_fermi_edge_correction(arr: xr.DataArray, correction=None, *args
             "what": "Shifted Fermi edge to align at 0 along hv axis",
             "by": "apply_photon_energy_fermi_edge_correction",
             "correction": list(
-                correction.values if isinstance(correction, xr.DataArray) else correction
+                correction.values
+                if isinstance(correction, xr.DataArray)
+                else correction
             ),
         },
     )
@@ -133,12 +145,16 @@ def build_direct_fermi_edge_correction(
 
     exclude_axes = ["eV", along]
     others = [d for d in arr.dims if d not in exclude_axes]
-    edge_fit = broadcast_model(GStepBModel, arr.sum(others).sel(eV=energy_range), along).results
+    edge_fit = broadcast_model(
+        GStepBModel, arr.sum(others).sel(eV=energy_range), along
+    ).results
 
     def sieve(c, v):
         return v.item().params["center"].stderr < 0.001
 
-    corrections = edge_fit.G.filter_coord(along, sieve).G.map(lambda x: x.params["center"].value)
+    corrections = edge_fit.G.filter_coord(along, sieve).G.map(
+        lambda x: x.params["center"].value
+    )
 
     if plot:
         corrections.plot()
@@ -171,7 +187,9 @@ def build_quadratic_fermi_edge_correction(
     not_nanny = (np.logical_not(np.isnan(arr)) * 1).sum("eV") > size_phi * 0.30
     condition = np.logical_and(edge_fit.F.s("center") < fit_limit, not_nanny)
 
-    quadratic_corr = QuadraticModel().guess_fit(edge_fit.F.p("center"), weights=condition * 1)
+    quadratic_corr = QuadraticModel().guess_fit(
+        edge_fit.F.p("center"), weights=condition * 1
+    )
     if plot:
         edge_fit.F.p("center").plot()
         plt.plot(arr.coords["phi"], quadratic_corr.best_fit)
@@ -180,7 +198,9 @@ def build_quadratic_fermi_edge_correction(
 
 
 @update_provenance("Build photon energy Fermi edge correction")
-def build_photon_energy_fermi_edge_correction(arr: xr.DataArray, plot=False, energy_window=0.2):
+def build_photon_energy_fermi_edge_correction(
+    arr: xr.DataArray, plot=False, energy_window=0.2
+):
     """Builds Fermi edge corrections across photon energy (corrects monochromator miscalibration)."""
     edge_fit = broadcast_model(
         GStepBModel,
@@ -191,7 +211,9 @@ def build_photon_energy_fermi_edge_correction(arr: xr.DataArray, plot=False, ene
     return edge_fit
 
 
-def apply_photon_energy_fermi_edge_correction(arr: xr.DataArray, correction=None, **kwargs):
+def apply_photon_energy_fermi_edge_correction(
+    arr: xr.DataArray, correction=None, **kwargs
+):
     """Applies Fermi edge corrections across photon energy (corrects monochromator miscalibration)."""
     if correction is None:
         correction = build_photon_energy_fermi_edge_correction(arr, **kwargs)
@@ -380,32 +402,46 @@ def fit_fermi_edge(cut: xr.DataArray):
 
 def fix_fermi_edge(ds: xr.Dataset, broadcast_fit: bool = True) -> xr.Dataset:
     """
-    Automatically corrects the Fermi edge in a dataset. Each spectrum in a scan is corrected independently.
-    By default, the spectra are summed along all scan axes to get a single Fermi edge fit, which is then broadcast to
-    all spectra. Each spectrum can be fit independently by setting broadcast_fit to False.
+    Automatically corrects the Fermi edge in a dataset. If the measurement was done with a
+    curved slit, the Fermi edge will only be shifted to 0. If the measurement was done with a
+    straight slit, the Fermi edge will be shifted to 0 and the curved Fermi edge will be corrected.
 
     Args:
         ds: The dataset to correct
-        broadcast_fit: Whether to fit the Fermi edge of the summed spectrum and then broadcast to all spectra.
+        broadcast_fit: Whether to fit the Fermi edge of the summed spectrum and then broadcast to
+            all spectra or fit each spectrum individually.
 
     Returns:
         A new dataset with the Fermi edge corrected.
     """
+    HEMISPHERE_DIMS = {"eV", "phi"}
     ds = ds.copy(deep=True)
+    curved_edge = ds.attrs["slit_shape"] == "straight"
     spectrum = ds.S.spectrum
+
+    if not all(dim in spectrum.dims for dim in HEMISPHERE_DIMS):
+        return ds
 
     # Moving the Fermi edge to 0
     integrated_edc = spectrum.sum([dim for dim in spectrum.dims if dim != "eV"])
     dropoff_index = np.argmin(np.diff(integrated_edc))
     zero_index = np.argmin(np.abs(spectrum["eV"].values))
     spectrum = spectrum.shift(eV=zero_index - dropoff_index)
+    if curved_edge is False:
+        ds = ds.assign_coords({"eV_shifted": ds["eV"] - ds["eV"].values[dropoff_index]})
+        ds = ds.assign_coords({"eV": ds["eV_shifted"]})
+        ds = ds.drop_vars("eV_shifted")
+        return ds
 
-    scan_axes = [dim for dim in spectrum.dims if dim not in {"eV", "phi"}]
+    scan_axes = [dim for dim in spectrum.dims if dim not in HEMISPHERE_DIMS]
     stacked = spectrum.stack(flattened=scan_axes)
+    edge_fit = (
+        fit_fermi_edge(stacked.sum("flattened")) if broadcast_fit is True else None
+    )
 
-    edge_fit = fit_fermi_edge(stacked.sum("flattened")) if broadcast_fit is True else None
-
-    fixed_cuts = [fix_one_fermi_edge(cut, edge_fit) for cut in stacked.transpose("flattened", ...)]
+    fixed_cuts = [
+        fix_one_fermi_edge(cut, edge_fit) for cut in stacked.transpose("flattened", ...)
+    ]
     fixed_stack = xr.concat(fixed_cuts, dim="flattened")
     stacked.values = fixed_stack.transpose(*stacked.dims)
 

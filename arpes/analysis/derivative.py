@@ -1,4 +1,5 @@
 """Derivative, curvature, and minimum gradient analysis."""
+
 import functools
 import warnings
 
@@ -87,7 +88,7 @@ def gradient_modulus(data: DataType, delta=1):
     return data_copy
 
 
-def curvature(arr: xr.DataArray, directions=None, alpha=1, beta=None):
+def curvature(ds: xr.Dataset, directions=None, alpha=1, beta=None):
     r"""Provides "curvature" analysis for band locations.
 
     Defined via
@@ -130,22 +131,26 @@ def curvature(arr: xr.DataArray, directions=None, alpha=1, beta=None):
     Returns:
         The curvature of the intensity of the original data.
     """
+    spectrum: xr.DataArray = ds.S.spectrum
+
     if beta is not None:
         alpha = np.power(10.0, beta)
 
     if directions is None:
-        directions = arr.dims[:2]
+        directions = spectrum.dims[:2]
 
-    axis_indices = tuple(arr.dims.index(d) for d in directions)
-    dx, dy = tuple(float(arr.coords[d][1] - arr.coords[d][0]) for d in directions)
-    dfx, dfy = np.gradient(arr.values, dx, dy, axis=axis_indices)
+    axis_indices = tuple(spectrum.dims.index(d) for d in directions)
+    dx, dy = tuple(
+        float(spectrum.coords[d][1] - spectrum.coords[d][0]) for d in directions
+    )
+    dfx, dfy = np.gradient(spectrum.values, dx, dy, axis=axis_indices)
     np.nan_to_num(dfx, copy=False)
     np.nan_to_num(dfy, copy=False)
 
     mdfdx, mdfdy = np.max(np.abs(dfx)), np.max(np.abs(dfy))
 
-    cy = (dy / dx) * (mdfdx ** 2 + mdfdy ** 2) * alpha
-    cx = (dx / dy) * (mdfdx ** 2 + mdfdy ** 2) * alpha
+    cy = (dy / dx) * (mdfdx**2 + mdfdy**2) * alpha
+    cx = (dx / dy) * (mdfdx**2 + mdfdy**2) * alpha
 
     dfx_2, dfy_2 = np.power(dfx, 2), np.power(dfy, 2)
     d2fy = np.gradient(dfy, dy, axis=axis_indices[1])
@@ -159,13 +164,15 @@ def curvature(arr: xr.DataArray, directions=None, alpha=1, beta=None):
         + (1 + cy * dfy_2) * cx * d2fx
     )
 
-    curv = xr.DataArray(numerator / denom, arr.coords, arr.dims, attrs=arr.attrs)
+    curv = xr.DataArray(
+        numerator / denom, spectrum.coords, spectrum.dims, attrs=spectrum.attrs
+    )
 
     if "id" in curv.attrs:
         del curv.attrs["id"]
         provenance(
             curv,
-            arr,
+            spectrum,
             {
                 "what": "Curvature",
                 "by": "curvature",
@@ -176,7 +183,9 @@ def curvature(arr: xr.DataArray, directions=None, alpha=1, beta=None):
     return curv
 
 
-def dn_along_axis(arr: xr.DataArray, axis=None, smooth_fn=None, order=2) -> xr.DataArray:
+def dn_along_axis(
+    arr: xr.DataArray, axis=None, smooth_fn=None, order=2
+) -> xr.DataArray:
     """Like curvature, performs a second derivative.
 
     You can pass a function to use for smoothing through
@@ -206,7 +215,9 @@ def dn_along_axis(arr: xr.DataArray, axis=None, smooth_fn=None, order=2) -> xr.D
             # have to do something
             axis = arr.dims[0]
             warnings.warn(
-                "Choosing axis: {} for the second derivative, no preferred axis found.".format(axis)
+                "Choosing axis: {} for the second derivative, no preferred axis found.".format(
+                    axis
+                )
             )
 
     if smooth_fn is None:

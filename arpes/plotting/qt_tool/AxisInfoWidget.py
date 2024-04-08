@@ -1,4 +1,5 @@
 """A widget providing rudimentary information about an axis on a DataArray."""
+
 # pylint: disable=import-error
 
 from PyQt5 import QtWidgets
@@ -34,11 +35,13 @@ class AxisInfoWidget(QtWidgets.QGroupBox):
 
     def recompute(self):
         """Force a recomputation of dependent UI state: here, the title and text."""
-        self.setTitle(self.root.data.dims[self.axis_index])
+        self.setTitle(self.root.spectrum.dims[self.axis_index])
         try:
             cursor_index = self.root.context["cursor"][self.axis_index]
             cursor_value = self.root.context["value_cursor"][self.axis_index]
-            self.label.setText("Cursor: {}, {:.3g}".format(int(cursor_index), cursor_value))
+            self.label.setText(
+                "Cursor: {}, {:.3g}".format(int(cursor_index), cursor_value)
+            )
         except KeyError:
             pass
 

@@ -1,4 +1,5 @@
 """An interactive band selection tool used to initialize curve fits."""
+
 import numpy as np
 from bokeh import events
 
@@ -66,7 +67,10 @@ class BandTool(SaveableTool, CursorTool):
         self.cursor = [np.mean(self.data_range["x"]), np.mean(self.data_range["y"])]
 
         self.color_maps["main"] = LinearColorMapper(
-            default_palette, low=np.min(arr.values), high=np.max(arr.values), nan_color="black"
+            default_palette,
+            low=np.min(arr.values),
+            high=np.max(arr.values),
+            nan_color="black",
         )
 
         main_tools = ["wheel_zoom", "tap", "reset"]
@@ -79,8 +83,8 @@ class BandTool(SaveableTool, CursorTool):
 
         figures["main"] = figure(
             tools=main_tools,
-            plot_width=self.app_main_size,
-            plot_height=self.app_main_size,
+            width=self.app_main_size,
+            height=self.app_main_size,
             min_border=10,
             min_border_left=50,
             toolbar_location="left",
@@ -98,19 +102,25 @@ class BandTool(SaveableTool, CursorTool):
             [arr.values.T],
             x=self.app_context["data_range"]["x"][0],
             y=self.app_context["data_range"]["y"][0],
-            dw=self.app_context["data_range"]["x"][1] - self.app_context["data_range"]["x"][0],
-            dh=self.app_context["data_range"]["y"][1] - self.app_context["data_range"]["y"][0],
+            dw=self.app_context["data_range"]["x"][1]
+            - self.app_context["data_range"]["x"][0],
+            dh=self.app_context["data_range"]["y"][1]
+            - self.app_context["data_range"]["y"][0],
             color_mapper=self.app_context["color_maps"]["main"],
         )
 
         # add lines
         self.add_cursor_lines(figures["main"])
-        band_lines = figures["main"].multi_line(xs=[], ys=[], line_color="white", line_width=1)
+        band_lines = figures["main"].multi_line(
+            xs=[], ys=[], line_color="white", line_width=1
+        )
 
         def append_point_to_band():
             cursor = self.cursor
             if self.active_band in self.app_context["bands"]:
-                self.app_context["bands"][self.active_band]["points"].append(list(cursor))
+                self.app_context["bands"][self.active_band]["points"].append(
+                    list(cursor)
+                )
                 update_band_display()
 
         def click_main_image(event):
@@ -190,7 +200,9 @@ class BandTool(SaveableTool, CursorTool):
             return fit_patterned_bands(
                 override_data if override_data is not None else self.arr,
                 packed_bands,
-                fit_direction="eV" if self.app_context["fit_mode"] == "edc" else angular_direction,
+                fit_direction=(
+                    "eV" if self.app_context["fit_mode"] == "edc" else angular_direction
+                ),
                 direction_normal=self.app_context["direction_normal"],
             )
 
@@ -204,7 +216,9 @@ class BandTool(SaveableTool, CursorTool):
             label="Fit Direction", button_type="primary", menu=DIRECTIONS
         )
         self.band_dropdown = widgets.Dropdown(
-            label="Active Band", button_type="primary", menu=self.app_context["band_options"]
+            label="Active Band",
+            button_type="primary",
+            menu=self.app_context["band_options"],
         )
         self.fit_mode_dropdown = widgets.Dropdown(
             label="Mode", button_type="primary", menu=FIT_MODES
@@ -294,8 +308,14 @@ class BandTool(SaveableTool, CursorTool):
         def update_band_display():
             band_names = self.app_context["bands"].keys()
             band_lines.data_source.data = {
-                "xs": [[p[0] for p in self.app_context["bands"][b]["points"]] for b in band_names],
-                "ys": [[p[1] for p in self.app_context["bands"][b]["points"]] for b in band_names],
+                "xs": [
+                    [p[0] for p in self.app_context["bands"][b]["points"]]
+                    for b in band_names
+                ],
+                "ys": [
+                    [p[1] for p in self.app_context["bands"][b]["points"]]
+                    for b in band_names
+                ],
             }
             self.save_app()
 
@@ -310,7 +330,9 @@ class BandTool(SaveableTool, CursorTool):
             if self.active_band in self.app_context["bands"]:
                 del self.app_context["bands"][self.active_band]
                 new_band_options = [
-                    b for b in self.app_context["band_options"] if b[0] != self.active_band
+                    b
+                    for b in self.app_context["band_options"]
+                    if b[0] != self.active_band
                 ]
                 self.band_dropdown.menu = new_band_options
                 self.app_context["band_options"] = new_band_options
@@ -327,7 +349,8 @@ class BandTool(SaveableTool, CursorTool):
         self.clear_band_button.on_click(on_clear_band)
         self.remove_band_button.on_click(on_remove_band)
         self.center_float_copy.on_click(on_copy_center_float)
-        self.center_float_widget.on_change(set_center_float_value)
+        # J: broken
+        # self.center_float_widget.on_change(set_center_float_value)
         self.direction_dropdown.on_click(set_fit_direction)
         self.fit_mode_dropdown.on_click(set_fit_mode)
         self.band_type_dropdown.on_click(set_band_type)

@@ -149,7 +149,9 @@ def stitch(
         list_of_files = list(df_or_list.index)
     else:
         if not isinstance(df_or_list, (list, tuple)):
-            raise TypeError("Expected an interable for a list of the scans to stitch together")
+            raise TypeError(
+                "Expected an interable for a list of the scans to stitch together"
+            )
 
         list_of_files = list(df_or_list)
 
@@ -160,7 +162,8 @@ def stitch(
         raise ValueError("Must supply at least one file to stitch")
 
     loaded = [
-        f if isinstance(f, (xr.DataArray, xr.Dataset)) else load_data(f) for f in list_of_files
+        f if isinstance(f, (xr.DataArray, xr.Dataset)) else load_data(f)
+        for f in list_of_files
     ]
 
     for i, loaded_file in enumerate(loaded):
@@ -224,6 +227,8 @@ def export_dataset(dataset: xr.Dataset, path: Union[str, Path]):
             "The path provided does not have a .nc extension. Adding one and continuing..."
         )
         path = path.parent / f"{path.name}.nc"
+    if not path.parent.exists():
+        path.parent.mkdir()
     dataset.to_netcdf(path)
 
 
@@ -297,4 +302,7 @@ def list_pickles() -> List[str]:
     Returns:
         A list of the named pickles, suitable for passing to `easy_pickle`.
     """
-    return [str(s.stem) for s in Path(file_for_pickle("just-a-pickle")).parent.glob("*.pickle")]
+    return [
+        str(s.stem)
+        for s in Path(file_for_pickle("just-a-pickle")).parent.glob("*.pickle")
+    ]

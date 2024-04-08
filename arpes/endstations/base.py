@@ -1,4 +1,5 @@
 """Plugin facility to read and normalize information from different sources to a common format."""
+
 from arpes.trace import Trace, traceable
 import warnings
 import re
@@ -18,7 +19,11 @@ import os.path
 from arpes.utilities.dict import case_insensitive_get
 from arpes.utilities.xarray import rename_dataset_keys
 from arpes.endstations.utilities.fits import find_clean_coords
-from arpes.endstations.utilities.hdf5 import construct_coords, get_attrs, dataset_to_array
+from arpes.endstations.utilities.hdf5 import (
+    construct_coords,
+    get_attrs,
+    dataset_to_array,
+)
 
 __all__ = [
     "endstation_name_from_alias",
@@ -135,7 +140,9 @@ class EndstationBase:
         Here, this just means collecting the ones with extensions acceptable to the loader.
         """
         return [
-            f for f in os.listdir(directory) if os.path.splitext(f)[1] in cls._TOLERATED_EXTENSIONS
+            f
+            for f in os.listdir(directory)
+            if os.path.splitext(f)[1] in cls._TOLERATED_EXTENSIONS
         ]
 
     @classmethod
@@ -155,7 +162,9 @@ class EndstationBase:
         workspace = workspace["name"]
 
         base_dir = workspace_path or os.path.join(arpes.config.DATA_PATH, workspace)
-        dir_options = [os.path.join(base_dir, option) for option in cls._SEARCH_DIRECTORIES]
+        dir_options = [
+            os.path.join(base_dir, option) for option in cls._SEARCH_DIRECTORIES
+        ]
 
         # another plugin related option here is we can restrict the number of regexes by allowing plugins
         # to install regexes for particular endstations, if this is needed in the future it might be a good way
@@ -189,7 +198,9 @@ class EndstationBase:
                 pass
 
         if str(file) and str(file)[0] == "f":  # try trimming the f off
-            return cls.find_first_file(str(file)[1:], scan_desc, allow_soft_match=allow_soft_match)
+            return cls.find_first_file(
+                str(file)[1:], scan_desc, allow_soft_match=allow_soft_match
+            )
 
         raise ValueError("Could not find file associated to {}".format(file))
 
@@ -376,7 +387,8 @@ class EndstationBase:
         ]
         self.trace(f"Found frames: {resolved_frame_locations}")
         frames = [
-            self.load_single_frame(fpath, scan_desc, **kwargs) for fpath in resolved_frame_locations
+            self.load_single_frame(fpath, scan_desc, **kwargs)
+            for fpath in resolved_frame_locations
         ]
         frames = [self.postprocess_frame(f) for f in frames]
         concatted = self.concatenate_frames(frames, scan_desc)
@@ -420,38 +432,38 @@ class HDF5Endstation(SingleFileEndstation):
 
     # If any other endstations use HDF5, we can try to generalize and move BL7 specific code to its plugin
 
-    def load_single_frame(self, frame_path: str = None, scan_desc: dict = None, **kwargs):
+    def load_single_frame(
+        self, frame_path: str = None, scan_desc: dict = None, **kwargs
+    ):
         """Loads a scan from a single .h5 file.
 
         This assumes the DAQ storage convention set by E. Rotenberg (possibly earlier authors)
-        used at beamline 7 (and elsewhere).
-
-        This involves several complications:
-
-        1. Hydrating/extracting coordinates from start/delta/n formats
-        2. Extracting multiple scan regions
-        3. Gracefully handling missing values
-        4. Unwinding different scan conventions to common formats
-        5. Handling early scan termination
+        used at beamline 7.
         """
         hdf5 = h5py.File(frame_path, "r")
 
-        constructed_coords, data_dimensions = construct_coords(hdf5)
+        all_coords, data_dimensions, scan_coord_names = construct_coords(hdf5)
+        scan_shape = tuple(
+            len(all_coords[coord_name]) for coord_name in scan_coord_names
+        )
 
         data_vars = {}
-
         for dataset in [hdf5["0D_Data"], hdf5["1D_Data"], hdf5["2D_Data"]]:
             for data_name in dataset:
-                if data_name in constructed_coords:
+                if data_name in all_coords:
                     continue
                 data = dataset_to_array(
-                    dataset[data_name], type="int32" if "Spectra" in data_name else "float64"
-                )  # Spectra are arrays of counts
+                    dataset[data_name],
+                    type="int32" if "Spectra" in data_name else "float64",
+                )
+                if len(scan_shape) > 1:
+                    proper_shape = data.shape[:-1] + scan_shape
+                    data = data.reshape(proper_shape)
                 coord_names = data_dimensions[data_name]
                 data_vars[data_name] = xr.DataArray(
                     data,
                     coords={
-                        coord_name: constructed_coords[coord_name] for coord_name in coord_names
+                        coord_name: all_coords[coord_name] for coord_name in coord_names
                     },
                     dims=coord_names,
                     name=data_name,
@@ -463,10 +475,10 @@ class HDF5Endstation(SingleFileEndstation):
 
         return xr.Dataset(
             data_vars={
-                f"{name}_safe" if name in constructed_coords else name: data
+                f"{name}_safe" if name in all_coords else name: data
                 for name, data in data_vars.items()
             },
-            coords=constructed_coords,
+            coords=all_coords,
             attrs=attrs,
         )
 
@@ -541,7 +553,9 @@ class FITSEndstation(SingleFileEndstation):
         "LMOTOR6": "alpha",
     }
 
-    def load_single_frame(self, frame_path: str = None, scan_desc: dict = None, **kwargs):
+    def load_single_frame(
+        self, frame_path: str = None, scan_desc: dict = None, **kwargs
+    ):
         """Loads a scan from a single .fits file.
 
         This assumes the DAQ storage convention set by E. Rotenberg (possibly earlier authors)
@@ -563,11 +577,15 @@ class FITSEndstation(SingleFileEndstation):
         # Clean the header because sometimes out LabView produces improper FITS files
         for i in range(len(hdulist)):
             # This looks a little stupid, but because of confusing astropy internals actually works
-            hdulist[i].header["UN_0_0"] = ""  # TODO This card is broken, this is not a good fix
+            hdulist[i].header[
+                "UN_0_0"
+            ] = ""  # TODO This card is broken, this is not a good fix
             del hdulist[i].header["UN_0_0"]
             hdulist[i].header["UN_0_0"] = ""
             if "TTYPE2" in hdulist[i].header and hdulist[i].header["TTYPE2"] == "Delay":
-                self.trace("Using ps delay units. This looks like an ALG main chamber scan.")
+                self.trace(
+                    "Using ps delay units. This looks like an ALG main chamber scan."
+                )
                 hdulist[i].header["TUNIT2"] = ""
                 del hdulist[i].header["TUNIT2"]
                 hdulist[i].header["TUNIT2"] = "ps"
@@ -671,11 +689,15 @@ class FITSEndstation(SingleFileEndstation):
 
                 # we also need to adjust the coordinates
                 altered_dimension = dimension_for_column[0]
-                built_coords[altered_dimension] = built_coords[altered_dimension][:n_slices]
+                built_coords[altered_dimension] = built_coords[altered_dimension][
+                    :n_slices
+                ]
 
             data_vars[column_display] = xr.DataArray(
                 resized_data,
-                coords={k: c for k, c in built_coords.items() if k in dimension_for_column},
+                coords={
+                    k: c for k, c in built_coords.items() if k in dimension_for_column
+                },
                 dims=dimension_for_column,
             )
 
@@ -800,7 +822,9 @@ def resolve_endstation(retry=True, **kwargs) -> type:
 
 
 @traceable
-def load_scan(scan_desc: Dict[str, str], retry=True, trace=None, **kwargs: Any) -> xr.Dataset:
+def load_scan(
+    scan_desc: Dict[str, str], retry=True, trace=None, **kwargs: Any
+) -> xr.Dataset:
     """Resolves a plugin and delegates loading a scan.
 
     This is used interally by `load_data` and should not be invoked directly

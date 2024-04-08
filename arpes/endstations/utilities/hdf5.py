@@ -2,8 +2,7 @@
 
 import numpy as np
 import h5py
-
-from typing import Dict, Union, List, Tuple
+from .common import safe_reshape
 
 __all__ = (
     "construct_coords",
@@ -12,25 +11,41 @@ __all__ = (
 )
 
 
-def get_scan_coords(scan_info: Dict[str, str], scalar_data: h5py.Dataset) -> Dict[str, np.ndarray]:
+def get_scan_coords(
+    scan_info: dict[str, str], scalar_data: h5py.Dataset
+) -> dict[str, np.ndarray]:
     """Gets the scan coordinates from the scan information in the headers"""
 
     n_loops = int(scan_info["LWLVLPN"])
     scan_coords = {}
     for loop in range(n_loops):
-        n_scan_dimensions = int(scan_info[f"NMSBDV{loop}"])
+        n_scan_coords = int(scan_info[f"NMSBDV{loop}"])
+        n_scan_dimensions = 0
+        for i in range(n_scan_coords):
+            if f"ST_{loop}_{i}" in scan_info:
+                n_scan_dimensions += 1
+
+        shape = tuple(
+            [int(scan_info[f"N_{loop}_{i}"]) for i in range(n_scan_dimensions)][::-1]
+        )
 
         for scan_dimension in range(n_scan_dimensions):
             if f"ST_{loop}_{scan_dimension}" not in scan_info:
                 continue
             name = scan_info[f"NM_{loop}_{scan_dimension}"]
-            data = dataset_to_array(scalar_data[name])
-            scan_coords[name] = data
+            raw_data = dataset_to_array(scalar_data[name])
+            reshaped_data = np.moveaxis(
+                safe_reshape(raw_data, shape), scan_dimension, 0
+            )
+            averaged_data = reshaped_data.mean(axis=tuple(range(n_scan_dimensions - 1)))
+            scan_coords[name] = averaged_data
 
     return scan_coords
 
 
-def construct_coords(hdf5: h5py.File) -> Tuple[Dict[str, np.ndarray], Dict[str, Tuple[str]]]:
+def construct_coords(
+    hdf5: h5py.File,
+) -> tuple[dict[str, np.ndarray], dict[str, tuple[str]], tuple[str]]:
     """
     Constructs all coordinates from the HDF5 file, including the scan coordinates and the detector coordinates.
     Returns a dictionary of the coordinates and a dictionary of the dimensions for each data variable
@@ -40,68 +55,69 @@ def construct_coords(hdf5: h5py.File) -> Tuple[Dict[str, np.ndarray], Dict[str, 
     low_level_scan_header = hdf5["Headers"]["Low_Level_Scan"]
     scan_info = {}
     for item in list(scan_header) + list(low_level_scan_header):
-        item: List[bytes]
+        item: list[bytes]
         try:
-            scan_info[item[1].decode("utf-8").strip()] = item[2].decode("utf-8").replace("'", "")
+            scan_info[item[1].decode("utf-8").strip()] = (
+                item[2].decode("utf-8").replace("'", "")
+            )
         except UnicodeDecodeError:
             pass
 
     scan_coords = get_scan_coords(scan_info, hdf5["0D_Data"])
+    scan_coord_names = tuple(scan_coords.keys())
     data_dimensions = {}
     constructed_coords = {}
 
     for scalar_data in hdf5["0D_Data"]:
-        # TODO: make sure the ordering is correct. will need multi-dimensional scan to test
         if scalar_data in scan_coords:
             continue
         data_dimensions[scalar_data] = tuple(scan_coords.keys())
 
-    # TODO: handle 1D data
-    for vector_data in hdf5["1D_Data"]:
-        pass
+    for n_dims in range(1, 3):
+        dataset = hdf5[f"{n_dims}D_Data"]
+        for data_name in dataset:
+            attrs = dataset[data_name].attrs
+            offsets = attrs["scaleOffset"][::-1]
+            deltas = attrs["scaleDelta"][::-1]
+            coord_names = attrs["unitNames"][::-1]
+            coord_lengths = dataset[data_name].shape[:n_dims]
 
-    image_dataset = hdf5["2D_Data"]
-    for image_data in image_dataset:
-        attrs = image_dataset[image_data].attrs
-        offsets = attrs["scaleOffset"][::-1]
-        deltas = attrs["scaleDelta"][::-1]
-        coord_names = attrs["unitNames"][::-1]
-        coord_lengths = image_dataset[image_data].shape[:2]
+            all_coords = ()
+            for dim in range(n_dims):
+                coord_name = coord_names[dim]
+                coord = {
+                    coord_name: np.linspace(
+                        offsets[dim],
+                        offsets[dim] + deltas[dim] * coord_lengths[dim],
+                        coord_lengths[dim],
+                    )
+                }
 
-        all_coords = ()
-        for dim in range(2):
-            coord_name = coord_names[dim]
-            coord = {
-                coord_name: np.linspace(
-                    offsets[dim],
-                    offsets[dim] + deltas[dim] * coord_lengths[dim],
-                    coord_lengths[dim],
-                )
-            }
+                if coord_name in constructed_coords:
+                    if np.array_equal(
+                        coord[coord_name], constructed_coords[coord_name]
+                    ):
+                        continue
+                    else:
+                        coord_name = f"{coord_name}_{data_name}"
+                        coord[f"{coord_name}_{data_name}"] = coord.pop(coord_name)
 
-            if coord_name in constructed_coords:
-                if np.array_equal(coord[coord_name], constructed_coords[coord_name]):
-                    continue
-                else:
-                    coord_name = f"{coord_name}_{image_data}"
-                    coord[f"{coord_name}_{image_data}"] = coord.pop(coord_name)
+                constructed_coords.update(coord)
+                all_coords += (set(coord).pop(),)
+            all_coords += tuple(scan_coords.keys())
 
-            constructed_coords.update(coord)
-            all_coords += (set(coord).pop(),)
-        all_coords += tuple(scan_coords.keys())
+            data_dimensions[data_name] = all_coords
 
-        data_dimensions[image_data] = all_coords
-
-    for coord in scan_coords:
-        if coord in constructed_coords:
-            constructed_coords[f"{coord}_scan"] = constructed_coords.pop(coord)
+    for coord_name, values in scan_coords.items():
+        if coord_name in constructed_coords:
+            constructed_coords[f"{coord_name}_scan"] = values
         else:
-            constructed_coords[coord] = scan_coords[coord]
+            constructed_coords[coord_name] = values
 
-    return constructed_coords, data_dimensions
+    return constructed_coords, data_dimensions, scan_coord_names
 
 
-def get_attrs(hdf5: h5py.File) -> Dict[str, str]:
+def get_attrs(hdf5: h5py.File) -> dict[str, str]:
     """Gets the relevant attributes from the HDF5 file"""
 
     attrs = {}
@@ -111,14 +127,14 @@ def get_attrs(hdf5: h5py.File) -> Dict[str, str]:
     except KeyError:
         pass
 
-    def clean_attr(value: bytes) -> Union[float, str]:
+    def clean_attr(value: bytes) -> float | str:
         value = value.decode("ascii")
         try:
             return float(value)
         except ValueError:
             return value.strip("'")
 
-    column_for_name = {"Beamline": 3}  # Default is 0
+    column_for_name = {"Beamline": 3}
     skip_headers = ["Low_Level_Scan", "Scan", "Switch"]
     headers = hdf5["Headers"]
     for header in headers:

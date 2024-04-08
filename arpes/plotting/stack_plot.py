@@ -57,7 +57,9 @@ def offset_scatter_plot(
     if len(data.data_vars[name_to_plot].dims) != 2:
         raise ValueError(
             "In order to produce a stack plot, data must be image-like."
-            "Passed data included dimensions: {}".format(data.data_vars[name_to_plot].dims)
+            "Passed data included dimensions: {}".format(
+                data.data_vars[name_to_plot].dims
+            )
         )
 
     fig = None
@@ -265,7 +267,7 @@ def flat_stack_plot(
 
 @save_plot_provenance
 def stack_dispersion_plot(
-    dataset: xr.Dataset, stack_axis: str = None, data_scaling: float = 2.0, **kwargs
+    data: DataType, stack_axis: str = None, data_scaling: float = 2.0, **kwargs
 ):
     """
     Generates a stack plot of a 2D dataset along the specified stack_axis.
@@ -279,7 +281,7 @@ def stack_dispersion_plot(
     Returns:
         fig, ax: figure and axis of the plot
     """
-    spectrum: xr.DataArray = dataset.S.spectrum
+    spectrum: xr.DataArray = data.S.spectrum if isinstance(data, xr.Dataset) else data
 
     axes = list(spectrum.dims)
     if len(axes) != 2:
@@ -288,14 +290,17 @@ def stack_dispersion_plot(
     try:
         axes.remove(stack_axis)
     except ValueError:
-        raise ValueError(f"stack_axis, {stack_axis}, is not one of the data's axes: {axes}")
+        raise ValueError(
+            f"stack_axis, {stack_axis}, is not one of the data's axes: {axes}"
+        )
     plot_axis = axes[0]
 
     spectrum = spectrum.sortby(stack_axis)
     max_stacks = kwargs.get("max_stacks", 15)
     if max_stacks < len(spectrum.coords[stack_axis]):
         stack_data = rebin(
-            spectrum, reduction={stack_axis: ceil(dataset.dims[stack_axis] / max_stacks)}
+            spectrum,
+            reduction={stack_axis: ceil(len(spectrum[stack_axis]) / max_stacks)},
         )
     else:
         stack_data = spectrum.copy(deep=True)
@@ -365,7 +370,9 @@ def overlapped_stack_dispersion_plot(
     if len(stack_coord.values) > max_stacks:
         data = rebin(
             data,
-            reduction=dict([[stack_axis, int(np.ceil(len(stack_coord.values) / max_stacks))]]),
+            reduction=dict(
+                [[stack_axis, int(np.ceil(len(stack_coord.values) / max_stacks))]]
+            ),
         )
 
     fig = None
@@ -400,7 +407,9 @@ def overlapped_stack_dispersion_plot(
         scale_factor = 0.02 * (np.max(cvalues) - np.min(cvalues)) / maximum_deviation
 
     iteration_order = -1  # might need to fiddle with this in certain cases
-    for coord_dict, marginal in list(data.G.iterate_axis(stack_axis))[::iteration_order]:
+    for coord_dict, marginal in list(data.G.iterate_axis(stack_axis))[
+        ::iteration_order
+    ]:
         coord_value = coord_dict[stack_axis]
 
         xs = cvalues
@@ -413,7 +422,9 @@ def overlapped_stack_dispersion_plot(
         else:
             true_ys = (
                 marginal_values
-                - np.linspace(marginal_offset, right_marginal_offset, len(marginal_values))
+                - np.linspace(
+                    marginal_offset, right_marginal_offset, len(marginal_values)
+                )
             ) / max_over_stacks
             ys = scale_factor * true_ys + coord_value
 

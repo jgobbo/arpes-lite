@@ -16,7 +16,11 @@ set_options(keep_attrs=True)
 import os
 
 cwd = Path(os.getcwd())
-sample_name = cwd.name
-data_root = cwd.parent.parent / "data" / sample_name
+measurement_date = cwd.name
+sample_name = cwd.parent.name
+root = cwd.parent.parent.parent
+data_root = root / "data" / sample_name / measurement_date
 exports_root = data_root / "exports"
-results_root = cwd.parent.parent / "results" / sample_name
+results_root = root / "results" / sample_name
+
+plt.rcParams["image.cmap"] = "magma"

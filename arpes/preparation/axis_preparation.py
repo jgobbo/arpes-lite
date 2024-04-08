@@ -1,7 +1,8 @@
 """Utilities related to treatment of coordinate axes."""
+
 import copy
 import functools
-from typing import List, Union
+from typing import List, Union, Container
 
 import numpy as np
 from scipy.ndimage import geometric_transform
@@ -57,7 +58,9 @@ def soft_normalize_dim(arr: xr.DataArray, dim_or_dims, keep_id=False, amp_limit=
     summed_arr = arr.fillna(arr.mean()).sum([d for d in arr.dims if d not in dims])
     normalized_arr = arr / (summed_arr / np.product(summed_arr.shape))
 
-    to_return = xr.DataArray(normalized_arr.values, arr.coords, arr.dims, attrs=arr.attrs)
+    to_return = xr.DataArray(
+        normalized_arr.values, arr.coords, arr.dims, attrs=arr.attrs
+    )
 
     if not keep_id and "id" in to_return.attrs:
         del to_return.attrs["id"]
@@ -76,40 +79,25 @@ def soft_normalize_dim(arr: xr.DataArray, dim_or_dims, keep_id=False, amp_limit=
 
 
 @lift_dataarray_to_generic
-def normalize_dim(arr: DataType, dim_or_dims: Union[str, List[str]], keep_id=False):
-    """Normalizes the intensity so that all values along axes other than `dim_or_dims` have the same value.
+def normalize_dim(arr: DataType, dims: Container[str] | str):
+    """Normalizes the intensity so that all values along axes specfied by "dims" are the same.
 
     The function normalizes so that the average value of cells in the output is 1.
 
     Args:
         arr: Input data which should be normalized
-        dim_or_dims: The set of dimensions which should be normalized
+        dim_o=r_dims: The set of dimensions which should be normalized
         keep_id: Whether to reset the data's id after normalization
 
     Returns:
         The normalized data.
     """
-    dims = dim_or_dims
-    if isinstance(dim_or_dims, str):
-        dims = [dims]
+    dims = [dims] if isinstance(dims, str) else dims
 
     summed_arr = arr.fillna(arr.mean()).sum([d for d in arr.dims if d not in dims])
     normalized_arr = arr / (summed_arr / np.product(summed_arr.shape))
 
-    to_return = xr.DataArray(normalized_arr.values, arr.coords, arr.dims, attrs=arr.attrs)
-
-    if not keep_id and "id" in to_return.attrs:
-        del to_return.attrs["id"]
-
-    provenance(
-        to_return,
-        arr,
-        {
-            "what": "Normalize axis or axes",
-            "by": "normalize_dim",
-            "dims": dims,
-        },
-    )
+    to_return = xr.DataArray(normalized_arr.values, arr.coords, arr.dims)
 
     return to_return
 
@@ -147,7 +135,9 @@ def transform_dataarray_axis(
     ds = dataset.copy()
     if transform_spectra is None:
         # transform *all* DataArrays in the dataset that have old_axis_name in their dimensions
-        transform_spectra = {k: v for k, v in ds.data_vars.items() if old_axis_name in v.dims}
+        transform_spectra = {
+            k: v for k, v in ds.data_vars.items() if old_axis_name in v.dims
+        }
 
     ds.coords[new_axis_name] = new_axis
 
@@ -162,13 +152,19 @@ def transform_dataarray_axis(
         new_dims[old_axis] = new_axis_name
 
         g = functools.partial(f, axis=old_axis)
-        output = geometric_transform(dr.values, g, output_shape=shape, output="f", order=1)
+        output = geometric_transform(
+            dr.values, g, output_shape=shape, output="f", order=1
+        )
 
         new_coords = dict(dr.coords)
         new_coords.pop(old_axis_name)
 
         new_dataarray = xr.DataArray(
-            output, coords=new_coords, dims=new_dims, attrs=dr.attrs.copy(), name=prep_name(dr.name)
+            output,
+            coords=new_coords,
+            dims=new_dims,
+            attrs=dr.attrs.copy(),
+            name=prep_name(dr.name),
         )
         new_dataarrays.append(new_dataarray)
         if "id" in new_dataarray.attrs:

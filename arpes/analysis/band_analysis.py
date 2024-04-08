@@ -6,12 +6,19 @@ import itertools
 
 import numpy as np
 from scipy.spatial import distance
+from lmfit import Parameter
 
 import arpes.models.band
 import arpes.utilities.math
 import xarray as xr
 from arpes.constants import HBAR_SQ_EV_PER_ELECTRON_MASS_ANGSTROM_SQ
-from arpes.fits import AffineBackgroundModel, LorentzianModel, QuadraticModel, broadcast_model
+from arpes.fits import (
+    AffineBackgroundModel,
+    LorentzianModel,
+    QuadraticModel,
+    LinearModel,
+    broadcast_model,
+)
 from arpes.provenance import update_provenance
 from arpes.typing import DataType
 from arpes.utilities import enumerate_dataarray, normalize_to_spectrum
@@ -46,9 +53,13 @@ def fit_for_effective_mass(data: DataType, fit_kwargs=None) -> float:
     if fit_kwargs is None:
         fit_kwargs = {}
     data = normalize_to_spectrum(data)
-    mom_dim = [d for d in ["kp", "kx", "ky", "kz", "phi", "beta", "theta"] if d in data.dims][0]
+    mom_dim = [
+        d for d in ["kp", "kx", "ky", "kz", "phi", "beta", "theta"] if d in data.dims
+    ][0]
 
-    results = broadcast_model([LorentzianModel, AffineBackgroundModel], data, mom_dim, **fit_kwargs)
+    results = broadcast_model(
+        [LorentzianModel, AffineBackgroundModel], data, mom_dim, **fit_kwargs
+    )
     if mom_dim in {"phi", "beta", "theta"}:
         forward = convert_coordinates_to_kspace_forward(data)
         final_mom = [d for d in ["kx", "ky", "kp", "kz"] if d in forward][0]
@@ -59,13 +70,17 @@ def fit_for_effective_mass(data: DataType, fit_kwargs=None) -> float:
         ]
         quad_fit = QuadraticModel().fit(eVs, x=np.array(kps))
 
-        return HBAR_SQ_EV_PER_ELECTRON_MASS_ANGSTROM_SQ / (2 * quad_fit.params["a"].value)
+        return HBAR_SQ_EV_PER_ELECTRON_MASS_ANGSTROM_SQ / (
+            2 * quad_fit.params["a"].value
+        )
 
     quad_fit = QuadraticModel().guess_fit(results.F.p("a_center"))
     return HBAR_SQ_EV_PER_ELECTRON_MASS_ANGSTROM_SQ / (2 * quad_fit.params["a"].value)
 
 
-def unpack_bands_from_fit(band_results: xr.DataArray, weights=None, use_stderr_weighting=True):
+def unpack_bands_from_fit(
+    band_results: xr.DataArray, weights=None, use_stderr_weighting=True
+):
     """This function is used to deconvolve the band identities of a series of overlapping bands.
 
     Sometimes through the fitting process, or across a place in the band structure where there is a nodal
@@ -147,7 +162,9 @@ def unpack_bands_from_fit(band_results: xr.DataArray, weights=None, use_stderr_w
 
         if closest_identified is None:
             first_coordinate = coordinate
-            closest_identified = [c.prefix for c in fit_result.model.components], fit_result
+            closest_identified = [
+                c.prefix for c in fit_result.model.components
+            ], fit_result
             identified_by_coordinate[frozen_coord] = closest_identified
 
         closest_prefixes, closest_fit = closest_identified
@@ -159,7 +176,8 @@ def unpack_bands_from_fit(band_results: xr.DataArray, weights=None, use_stderr_w
 
         for i, j in np.ndindex(mat_shape):
             dist_mat[i, j] = distance.euclidean(
-                as_vector(fit_result, prefixes[i]), as_vector(closest_fit, closest_prefixes[j])
+                as_vector(fit_result, prefixes[i]),
+                as_vector(closest_fit, closest_prefixes[j]),
             )
 
         best_arrangement = None
@@ -268,19 +286,26 @@ def fit_patterned_bands(
         for point_low, point_high in zip(points, points[1:]):
             coord_other_index = 1 - coord_index
 
-            check_coord_low, check_coord_high = point_low[coord_index], point_high[coord_index]
+            check_coord_low, check_coord_high = (
+                point_low[coord_index],
+                point_high[coord_index],
+            )
             if is_between(coord, check_coord_low, check_coord_high):
                 # this is unnecessarily complicated
                 if check_coord_low < check_coord_high:
                     yield coord, (coord - check_coord_low) / (
                         check_coord_high - check_coord_low
-                    ) * (point_high[coord_other_index] - point_low[coord_other_index]) + point_low[
+                    ) * (
+                        point_high[coord_other_index] - point_low[coord_other_index]
+                    ) + point_low[
                         coord_other_index
                     ]
                 else:
                     yield coord, (coord - check_coord_high) / (
                         check_coord_low - check_coord_high
-                    ) * (point_low[coord_other_index] - point_high[coord_other_index]) + point_high[
+                    ) * (
+                        point_low[coord_other_index] - point_high[coord_other_index]
+                    ) + point_high[
                         coord_other_index
                     ]
 
@@ -351,7 +376,9 @@ def fit_patterned_bands(
             {
                 "band": band,
                 "name": "{}_{}".format(name, i),
-                "params": build_params(params, band_center, params.get("stray", stray)),  # TODO
+                "params": build_params(
+                    params, band_center, params.get("stray", stray)
+                ),  # TODO
             }
             for i, (_, band_center) in enumerate(partial_band_locations)
         ]
@@ -366,7 +393,10 @@ def fit_patterned_bands(
 
     total_slices = np.product([len(arr.coords[d]) for d in free_directions])
     for coord_dict, marginal in wrap_tqdm(
-        arr.G.iterate_axis(free_directions), interactive, desc="fitting", total=total_slices
+        arr.G.iterate_axis(free_directions),
+        interactive,
+        desc="fitting",
+        total=total_slices,
     ):
         partial_bands = [
             resolve_partial_bands_from_description(coord_dict, marginal=marginal, **b)
@@ -404,7 +434,9 @@ def fit_patterned_bands(
         composite_model = functools.reduce(lambda x, y: x + y, internal_models)
         new_params = composite_model.make_params()
         fit_result = composite_model.fit(
-            marginal.values, new_params, x=marginal.coords[list(marginal.indexes)[0]].values
+            marginal.values,
+            new_params,
+            x=marginal.coords[list(marginal.indexes)[0]].values,
         )
 
         # populate models, sample code
@@ -475,7 +507,9 @@ def fit_bands(
 
     if direction == "mdc":
         if preferred_k_direction is None:
-            possible_directions = set(directions).intersection({"kp", "kx", "ky", "phi"})
+            possible_directions = set(directions).intersection(
+                {"kp", "kx", "ky", "phi"}
+            )
             broadcast_direction = list(possible_directions)[0]
 
     directions.remove(broadcast_direction)
@@ -485,7 +519,10 @@ def fit_bands(
 
     # Let the first band be given by fitting the raw data to this band
     # Find subsequent peaks by fitting models to the residuals
-    raw_bands = [band.get("band") if isinstance(band, dict) else band for band in band_description]
+    raw_bands = [
+        band.get("band") if isinstance(band, dict) else band
+        for band in band_description
+    ]
     initial_fits = None
     all_fit_parameters = {}
 
@@ -556,7 +593,9 @@ def fit_bands(
             **{k: v.value for k, v in closest_model_params.items()}
         )
         fit_result = composite_model.fit(
-            marginal.values, new_params, x=marginal.coords[list(marginal.indexes)[0]].values
+            marginal.values,
+            new_params,
+            x=marginal.coords[list(marginal.indexes)[0]].values,
         )
 
         # insert fit into the results, insert the parameters into the cache so that we have
@@ -570,3 +609,66 @@ def fit_bands(
     residual = None
 
     return band_results, unpacked_bands, residual
+
+
+def extract_band_velocity(
+    dataset: DataType,
+    slope_guess: float,
+    intercept_guess: float,
+    energy_window: float = 0.2,
+    show: bool = False,
+) -> float:
+    spectrum: xr.DataArray = (
+        dataset if isinstance(dataset, xr.DataArray) else dataset.S.spectrum
+    )
+
+    def fit_guess(x: np.ndarray) -> np.ndarray:
+        return slope_guess * x + intercept_guess
+
+    masked_spectrum = spectrum.where(
+        np.abs(fit_guess(spectrum["kp"]) - spectrum["eV"]) < energy_window
+    )
+
+    centers = []
+    energies = []
+    errors = []
+    for i, mdc in enumerate(masked_spectrum.transpose("eV", ...)):
+        not_masked = ~np.isnan(mdc)
+        x: np.ndarray = mdc["kp"][not_masked]
+        y: np.ndarray = mdc[not_masked]
+        linear_result = LorentzianModel().fit(
+            y,
+            x=x,
+            center=np.mean(x),
+            amplitude=y.max(),
+            sigma=(x.max() - x.min()) / 2,
+        )
+
+        center: Parameter = linear_result.params["center"]
+        energy = spectrum["eV"].values[i]
+        if abs(fit_guess(center.value) - energy) < energy_window:
+            centers.append(center.value)
+            energies.append(energy)
+            errors.append(center.stderr)
+
+    x = centers
+    y = energies
+
+    linear_result = LinearModel().fit(
+        y, x=x, slope=slope_guess, intercept=intercept_guess
+    )
+    slope_result = linear_result.params["slope"]
+
+    if show:
+        from matplotlib import pyplot as plt
+
+        axs: np.ndarray[plt.Axes]
+        _, axs = plt.subplots(1, 2)
+        masked_spectrum.S.plot(ax=axs[0])
+        linear_result.plot_fit(ax=axs[0])
+        linear_result.plot_residuals(ax=axs[1])
+
+        axs[0].set_xlim(min(x), max(x))
+        plt.show()
+
+    return slope_result.value, slope_result.stderr

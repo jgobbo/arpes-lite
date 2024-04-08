@@ -1,4 +1,5 @@
 """A live momentun conversion tool, useful for finding and setting offsets."""
+
 from PyQt5 import QtWidgets
 import numpy as np
 
@@ -58,7 +59,7 @@ class KTool(SimpleApp):
 
         self.energy_window = energy_window
         self.conversion_kwargs = kwargs
-        self.data = None
+        # self.data = None
         self.content_layout = None
         self.main_layout = None
         self.apply_offsets = apply_offsets
@@ -141,7 +142,7 @@ class KTool(SimpleApp):
 
         If a Brillouin zone was requestd, plots that over the data as well.
         """
-        self.views["xy"].setImage(self.data)
+        self.views["xy"].setImage(self.spectrum)
 
         kdata = convert_to_kspace(self.data, **self.conversion_kwargs)
         if "eV" in kdata.dims:

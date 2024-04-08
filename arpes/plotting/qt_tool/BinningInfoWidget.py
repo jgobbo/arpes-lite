@@ -37,7 +37,7 @@ class BinningInfoWidget(QtWidgets.QGroupBox):
 
     def recompute(self):
         """Redraws all dependent UI state, namely the title."""
-        self.setTitle(self.root.data.dims[self.axis_index])
+        self.setTitle(self.root.spectrum.dims[self.axis_index])
 
     def changeBinning(self):
         """Callback for widget value changes which sets the binning on the root app."""
