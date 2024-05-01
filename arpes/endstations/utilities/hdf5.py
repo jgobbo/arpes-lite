@@ -30,7 +30,9 @@ def get_scan_coords(
         )
 
         for scan_dimension in range(n_scan_dimensions):
-            if f"ST_{loop}_{scan_dimension}" not in scan_info:
+            if (f"ST_{loop}_{scan_dimension}" not in scan_info) or (
+                shape[scan_dimension] == 1
+            ):
                 continue
             name = scan_info[f"NM_{loop}_{scan_dimension}"]
             raw_data = dataset_to_array(scalar_data[name])
@@ -66,14 +68,14 @@ def construct_coords(
     scan_coords = get_scan_coords(scan_info, hdf5["0D_Data"])
     scan_coord_names = tuple(scan_coords.keys())
     data_dimensions = {}
-    constructed_coords = {}
+    constructed_coords = scan_coords.copy()
 
     for scalar_data in hdf5["0D_Data"]:
         if scalar_data in scan_coords:
             continue
         data_dimensions[scalar_data] = tuple(scan_coords.keys())
 
-    for n_dims in range(1, 3):
+    for n_dims in (1, 2):
         dataset = hdf5[f"{n_dims}D_Data"]
         for data_name in dataset:
             attrs = dataset[data_name].attrs
@@ -82,38 +84,26 @@ def construct_coords(
             coord_names = attrs["unitNames"][::-1]
             coord_lengths = dataset[data_name].shape[:n_dims]
 
-            all_coords = ()
+            all_coords_for_data = []
             for dim in range(n_dims):
                 coord_name = coord_names[dim]
-                coord = {
-                    coord_name: np.linspace(
-                        offsets[dim],
-                        offsets[dim] + deltas[dim] * coord_lengths[dim],
-                        coord_lengths[dim],
-                    )
-                }
+                coord_values = np.linspace(
+                    offsets[dim],
+                    offsets[dim] + deltas[dim] * coord_lengths[dim],
+                    coord_lengths[dim],
+                )
 
                 if coord_name in constructed_coords:
-                    if np.array_equal(
-                        coord[coord_name], constructed_coords[coord_name]
-                    ):
+                    if np.array_equal(coord_values, constructed_coords[coord_name]):
+                        all_coords_for_data.append(coord_name)
                         continue
                     else:
                         coord_name = f"{coord_name}_{data_name}"
-                        coord[f"{coord_name}_{data_name}"] = coord.pop(coord_name)
 
-                constructed_coords.update(coord)
-                all_coords += (set(coord).pop(),)
-            all_coords += tuple(scan_coords.keys())
-
-            data_dimensions[data_name] = all_coords
-
-    for coord_name, values in scan_coords.items():
-        if coord_name in constructed_coords:
-            constructed_coords[f"{coord_name}_scan"] = values
-        else:
-            constructed_coords[coord_name] = values
-
+                all_coords_for_data.append(coord_name)
+                constructed_coords[coord_name] = coord_values
+            all_coords_for_data += list(scan_coords.keys())
+            data_dimensions[data_name] = tuple(all_coords_for_data)
     return constructed_coords, data_dimensions, scan_coord_names
 
 

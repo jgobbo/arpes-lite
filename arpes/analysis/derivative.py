@@ -131,7 +131,7 @@ def curvature(ds: xr.Dataset, directions=None, alpha=1, beta=None):
     Returns:
         The curvature of the intensity of the original data.
     """
-    spectrum: xr.DataArray = ds.S.spectrum
+    spectrum: xr.DataArray = ds.S.spectrum if isinstance(ds, xr.Dataset) else ds
 
     if beta is not None:
         alpha = np.power(10.0, beta)

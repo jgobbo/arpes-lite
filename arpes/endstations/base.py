@@ -459,6 +459,9 @@ class HDF5Endstation(SingleFileEndstation):
                 if len(scan_shape) > 1:
                     proper_shape = data.shape[:-1] + scan_shape
                     data = data.reshape(proper_shape)
+                elif not scan_shape:
+                    # J: TODO test this with 2D data taken without a scan
+                    data = data.transpose()[0]
                 coord_names = data_dimensions[data_name]
                 data_vars[data_name] = xr.DataArray(
                     data,
