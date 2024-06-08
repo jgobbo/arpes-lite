@@ -4,8 +4,10 @@ from setuptools import find_packages, setup
 ROOT = Path(__file__).parent
 
 NAME = "arpes"
-DESCRIPTION = "Modular data analysis code for angle resolved photoemission spectroscopy (ARPES)"
-URL = "https://gitlab.com/lanzara-group/python-arpes"
+DESCRIPTION = (
+    "Modular data analysis code for angle resolved photoemission spectroscopy (ARPES)"
+)
+URL = "https://github.com/jgobbo/arpes-lite"
 EMAIL = "chstan@berkeley.edu"
 AUTHOR = "Conrad Stansbury"
 LICENSE = "GPLv3"

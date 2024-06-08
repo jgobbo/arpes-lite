@@ -13,7 +13,7 @@ from arpes.utilities.ui import CursorRegion
 from .data_array_image_view import DataArrayImageView, DataArrayPlot
 from .utils import PlotOrientation, ReactivePlotRecord
 
-import arpes.config
+from arpes.config import SETTINGS
 
 __all__ = ["SimpleApp"]
 
@@ -43,7 +43,7 @@ class SimpleApp:
             list
         )
 
-        self.settings = arpes.config.SETTINGS.copy()
+        self.settings = SETTINGS.copy()
 
     def copy_to_clipboard(self, value: typing.Any) -> None:
         """Attempts to copy the value to the clipboard, or else prints."""
@@ -146,7 +146,7 @@ class SimpleApp:
             layout = self._layout
 
         remaining_dims = [
-            l for l in list(range(len(self.data.dims))) if l not in dimensions
+            l for l in list(range(len(self.spectrum.dims))) if l not in dimensions
         ]
 
         if len(remaining_dims) == 1:
@@ -220,11 +220,6 @@ class SimpleApp:
 
     def start(self, no_exec: bool = False, app: QtWidgets.QApplication = None):
         """Starts the Qt application, configures the window, and begins Qt execution."""
-        # When running in nbconvert, don't actually open tools.
-        import arpes.config
-
-        if arpes.config.DOCS_BUILD:
-            return
 
         if app is None:
             app = QtWidgets.QApplication([])

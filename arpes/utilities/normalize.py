@@ -1,4 +1,5 @@
 """Utilities to programmatically get access to an ARPES spectrum as an xr.DataArray."""
+
 import xarray as xr
 from arpes.typing import DataType
 
@@ -35,3 +36,11 @@ def normalize_to_dataset(data: DataType):
 
     if isinstance(data, (str, int)):
         return load_data(data)
+
+
+def extract_spectrum(func):
+    """
+    Decorator to extract the spectrum from a dataset before applying a function.
+    """
+    # TODO
+    ...

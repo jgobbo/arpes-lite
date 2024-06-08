@@ -1,9 +1,10 @@
 """Infrastructure code for Qt application windows."""
+
 import sys
 
 from PyQt5 import QtGui, QtCore, QtWidgets
 
-import arpes.config
+from arpes.config import SETTINGS
 from arpes.utilities.excepthook import patched_excepthook
 from arpes.utilities.ui import KeyBinding
 
@@ -81,7 +82,10 @@ class SimpleWindow(QtWidgets.QMainWindow, QtCore.QObject):
         ]
 
         if event.type() in [QtCore.QEvent.KeyPress, QtCore.QEvent.ShortcutOverride]:
-            if event.type() != QtCore.QEvent.ShortcutOverride or event.key() in special_keys:
+            if (
+                event.type() != QtCore.QEvent.ShortcutOverride
+                or event.key() in special_keys
+            ):
                 self.handleKeyPressEvent(event)
 
         return super().eventFilter(source, event)
@@ -97,7 +101,7 @@ class SimpleWindow(QtWidgets.QMainWindow, QtCore.QObject):
                     binding.handler(event)
 
         if not handled:
-            if arpes.config.SETTINGS.get("DEBUG", False):
+            if SETTINGS.get("DEBUG", False):
                 print(f"{event.key()} @ {type(self)}:{event}")
 
     def toggle_help(self, event):
@@ -128,4 +132,4 @@ class SimpleApp:
         self.settings = None
         self.context = {}
 
-        self.settings = arpes.config.SETTINGS.copy()
+        self.settings = SETTINGS.copy()

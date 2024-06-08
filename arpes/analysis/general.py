@@ -267,3 +267,12 @@ def rebin(
     )
 
     return xr.DataArray(reduced_data, reduced_coords, data.dims, attrs=data.attrs)
+
+
+def normalize(data: DataType) -> xr.DataArray:
+    """
+    Normalize the data such that the minimum value is 0 and the maximum value is 1.
+    """
+    spectrum = data.S.spectrum if isinstance(data, xr.Dataset) else data
+    spectrum = spectrum.copy(deep=True)
+    return (spectrum - spectrum.min()) / (spectrum.max() - spectrum.min())

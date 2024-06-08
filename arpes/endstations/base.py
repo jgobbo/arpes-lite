@@ -6,19 +6,16 @@ import re
 
 import numpy as np
 import xarray as xr
-from astropy.io import fits
 import h5py
 
 from pathlib import Path
 from typing import Any, Dict, List, Union
 import copy
-import arpes.config
 import arpes.constants
 import os.path
 
 from arpes.utilities.dict import case_insensitive_get
 from arpes.utilities.xarray import rename_dataset_keys
-from arpes.endstations.utilities.fits import find_clean_coords
 from arpes.endstations.utilities.hdf5 import (
     construct_coords,
     get_attrs,
@@ -32,7 +29,6 @@ __all__ = [
     "load_scan",
     "EndstationBase",
     "HDF5Endstation",
-    "FITSEndstation",
     "HemisphericalEndstation",
     "SynchrotronEndstation",
     "SingleFileEndstation",
@@ -107,7 +103,7 @@ class EndstationBase:
 
     trace: Trace
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.trace = Trace(silent=True)
 
     @classmethod
@@ -262,7 +258,6 @@ class EndstationBase:
         2. Rename attributes
         """
 
-        # J: all attributes/coords get renamed here and nowhere else
         frame = rename_dataset_keys(frame, self.RENAME_KEYS)
 
         sum_dims = []
@@ -286,41 +281,6 @@ class EndstationBase:
         3. Apply attribute renaming and attribute transformations defined by class attrs
         4. Ensure the scan endianness matches the system for performance reasons down the line
         """
-        # attach the 'spectrum_type'
-        # TODO move this logic into xarray extensions and customize here
-        # only as necessary
-        # coord_names = tuple(sorted([c for c in data.dims if c != "cycle"]))
-
-        # spectrum_type = None
-        # # if x, y, or z are present, remove them and check spectrum type
-        # if any(d in coord_names for d in {"x", "y", "z"}):
-        #     coord_names = tuple(c for c in coord_names if c not in {"x", "y", "z"})
-        #     spectrum_types = {
-        #         ("eV",): "spem",
-        #         ("eV", "phi"): "ucut",
-        #     }
-        #     spectrum_type = spectrum_types.get(coord_names)
-        # else:
-        #     spectrum_types = {
-        #         ("eV",): "xps",
-        #         ("eV", "phi", "theta"): "map",
-        #         ("eV", "phi", "psi"): "map",
-        #         ("beta", "eV", "phi"): "map",
-        #         ("eV", "hv", "phi"): "hv_map",
-        #         ("eV", "phi"): "cut",
-        #     }
-        #     spectrum_type = spectrum_types.get(coord_names)
-
-        # if "phi" not in data.coords:
-        #     # XPS
-        #     data.coords["phi"] = 0
-        #     for spectrum in data.S.spectra:
-        #         spectrum.coords["phi"] = 0
-
-        # if spectrum_type is not None:
-        #     data.attrs["spectrum_type"] = spectrum_type
-        # else:
-        #     warnings.warn(f"Could not determine spectrum type from coordinates {coord_names}.")
 
         for k, key_fn in self.ATTR_TRANSFORMS.items():
             if k in data.attrs:
@@ -350,9 +310,9 @@ class EndstationBase:
 
         # go and change endianness and datatypes to something reasonable
         # this is done for performance reasons in momentum space conversion, primarily
-        for k, v in data.data_vars.items():
-            if not v.dtype.isnative:
-                v.values = v.values.byteswap().newbyteorder()
+        for data_var in data.data_vars.values():
+            if not data_var.dtype.isnative:
+                data_var.values = data_var.values.byteswap().newbyteorder()
 
         return data
 
@@ -460,7 +420,6 @@ class HDF5Endstation(SingleFileEndstation):
                     proper_shape = data.shape[:-1] + scan_shape
                     data = data.reshape(proper_shape)
                 elif not scan_shape:
-                    # J: TODO test this with 2D data taken without a scan
                     data = data.transpose()[0]
                 coord_names = data_dimensions[data_name]
                 data_vars[data_name] = xr.DataArray(
@@ -488,237 +447,6 @@ class HDF5Endstation(SingleFileEndstation):
     def postprocess_frame(self, frame: xr.Dataset):
         frame = super().postprocess_frame(frame)
 
-        deg_to_rad_coords = {"beta", "theta", "psi"}
-        for coord_name in deg_to_rad_coords:
-            for data_type in [frame.coords, frame.attrs]:
-                if coord_name in data_type:
-                    try:
-                        data_type[coord_name] = data_type[coord_name] * (np.pi / 180)
-                    except (TypeError, ValueError):
-                        pass
-
-        return frame
-
-
-class FITSEndstation(SingleFileEndstation):
-    """Loads data from the .fits format produced by the MAESTRO software and derivatives.
-
-    This ends up being somewhat complicated, because the FITS export is written in LabView and
-    does not conform to the standard specification for the FITS archive format.
-
-    Many of the intricacies here are in fact those shared between MAESTRO's format
-    and the Lanzara Lab's format. Conrad does not foresee this as an issue, because it is
-    unlikely that many other ARPES labs will adopt this data format moving forward, in
-    light of better options derivative of HDF like the NeXuS format.
-    """
-
-    PREPPED_COLUMN_NAMES = {
-        "time": "time",
-        "Delay": "delay-var",  # these are named thus to avoid conflicts with the
-        "Sample-X": "cycle-var",  # underlying coordinates
-        "Mira": "pump_power",
-        # insert more as needed
-    }
-
-    SKIP_COLUMN_NAMES = {
-        "Phi",
-        "null",
-        "X",
-        "Y",
-        "Z",
-        "mono_eV",
-        "Slit Defl",
-        "Optics Stage",
-        "Scan X",
-        "Scan Y",
-        "Scan Z",
-        # insert more as needed
-    }
-
-    SKIP_COLUMN_FORMULAS = {
-        lambda name: True if ("beamview" in name or "IMAQdx" in name) else False,
-    }
-
-    RENAME_KEYS = {
-        "Phi": "chi",
-        "Beta": "beta",
-        "Azimuth": "chi",
-        "Pump_energy_uJcm2": "pump_fluence",
-        "T0_ps": "t0_nominal",
-        "W_func": "workfunction",
-        "Slit": "slit",
-        "LMOTOR0": "x",
-        "LMOTOR1": "y",
-        "LMOTOR2": "z",
-        "LMOTOR3": "theta",
-        "LMOTOR4": "beta",
-        "LMOTOR5": "chi",
-        "LMOTOR6": "alpha",
-    }
-
-    def load_single_frame(
-        self, frame_path: str = None, scan_desc: dict = None, **kwargs
-    ):
-        """Loads a scan from a single .fits file.
-
-        This assumes the DAQ storage convention set by E. Rotenberg (possibly earlier authors)
-        for the storage of ARPES data in FITS tables.
-
-        This involves several complications:
-
-        1. Hydrating/extracting coordinates from start/delta/n formats
-        2. Extracting multiple scan regions
-        3. Gracefully handling missing values
-        4. Unwinding different scan conventions to common formats
-        5. Handling early scan termination
-        """
-        # Use dimension labels instead of
-        self.trace("Opening FITS HDU list.")
-        hdulist = fits.open(frame_path, ignore_missing_end=True)
-        primary_dataset_name = None
-
-        # Clean the header because sometimes out LabView produces improper FITS files
-        for i in range(len(hdulist)):
-            # This looks a little stupid, but because of confusing astropy internals actually works
-            hdulist[i].header[
-                "UN_0_0"
-            ] = ""  # TODO This card is broken, this is not a good fix
-            del hdulist[i].header["UN_0_0"]
-            hdulist[i].header["UN_0_0"] = ""
-            if "TTYPE2" in hdulist[i].header and hdulist[i].header["TTYPE2"] == "Delay":
-                self.trace(
-                    "Using ps delay units. This looks like an ALG main chamber scan."
-                )
-                hdulist[i].header["TUNIT2"] = ""
-                del hdulist[i].header["TUNIT2"]
-                hdulist[i].header["TUNIT2"] = "ps"
-
-            self.trace(f"HDU {i}: Attempting to fix FITS errors.")
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                hdulist[i].verify("fix+warn")
-                hdulist[i].header.update()
-            # This actually requires substantially more work because it is lossy to information
-            # on the unit that was encoded
-
-        hdu = hdulist[1]
-
-        scan_desc = copy.deepcopy(scan_desc)
-        attrs = scan_desc.pop("note", scan_desc)
-        attrs.update(dict(hdulist[0].header))
-
-        drop_attrs = ["COMMENT", "HISTORY", "EXTEND", "SIMPLE", "SCANPAR", "SFKE_0"]
-        for dropped_attr in drop_attrs:
-            if dropped_attr in attrs:
-                del attrs[dropped_attr]
-
-        built_coords, dimensions, real_spectrum_shape = find_clean_coords(
-            hdu, attrs, mode="MC", trace=self.trace
-        )
-        self.trace("Recovered coordinates from FITS file.")
-
-        # J: TODO don't want to do this here unless I have to
-        def clean_key_name(k: str) -> str:
-            if "#" in k:
-                k = k.replace("#", "num")
-
-            return k
-
-        attrs = {clean_key_name(k): v for k, v in attrs.items()}
-        scan_desc = {clean_key_name(k): v for k, v in scan_desc.items()}
-
-        data_vars = {}
-        for column_name in hdu.columns.names:
-            # we skip some fixed set of the columns, such as the one dimensional axes, as well as things that are too
-            # tricky to load at the moment, like the microscope images from MAESTRO
-            should_skip = False
-            if column_name in self.SKIP_COLUMN_NAMES:
-                should_skip = True
-
-            for formula in self.SKIP_COLUMN_FORMULAS:
-                if formula(column_name):
-                    should_skip = True
-
-            if should_skip:
-                continue
-
-            # the hemisphere axis is handled below
-            dimension_for_column = dimensions[column_name]
-            column_shape = real_spectrum_shape[column_name]
-
-            column_display = self.PREPPED_COLUMN_NAMES.get(column_name, column_name)
-
-            # sometimes if a scan is terminated early it can happen that the sizes do not match the expected value
-            # as an example, if a beta map is supposed to have 401 slices, it might end up having only 260 if it were
-            # terminated early
-            # If we are confident in our parsing code above, we can handle this case and take a subset of the coords
-            # so that the data matches
-            try:
-                resized_data = hdu.data.columns[column_name].array.reshape(column_shape)
-            except ValueError:
-                # if we could not resize appropriately, we will try to reify the shapes together
-                rest_column_shape = column_shape[1:]
-                n_per_slice = int(np.prod(rest_column_shape))
-                total_shape = hdu.data.columns[column_name].array.shape
-                total_n = np.prod(total_shape)
-
-                n_slices = total_n // n_per_slice
-                # if this isn't true, we can't recover
-                data_for_resize = hdu.data.columns[column_name].array
-                if total_n // n_per_slice != total_n / n_per_slice:
-                    # the last slice was in the middle of writing when something hit the fan
-                    # we need to infer how much of the data to read, and then repeat the above
-                    # we need to cut the data
-
-                    # This can happen when the labview crashes during data collection,
-                    # we use column_shape[1] because of the row order that is used in the FITS file
-                    data_for_resize = data_for_resize[
-                        0 : (total_n // n_per_slice) * column_shape[1]
-                    ]
-                    warnings.warn(
-                        "Column {} was in the middle of slice when DAQ stopped. Throwing out incomplete slice...".format(
-                            column_name
-                        )
-                    )
-
-                column_shape = list(column_shape)
-                column_shape[0] = n_slices
-
-                try:
-                    resized_data = data_for_resize.reshape(column_shape)
-                except Exception:
-                    # sometimes for whatever reason FITS errors and cannot read the data
-                    continue
-
-                # we also need to adjust the coordinates
-                altered_dimension = dimension_for_column[0]
-                built_coords[altered_dimension] = built_coords[altered_dimension][
-                    :n_slices
-                ]
-
-            data_vars[column_display] = xr.DataArray(
-                resized_data,
-                coords={
-                    k: c for k, c in built_coords.items() if k in dimension_for_column
-                },
-                dims=dimension_for_column,
-            )
-
-        hdulist.close()
-
-        self.trace("Stitching together xr.Dataset.")
-        return xr.Dataset(
-            {
-                f"safe-{name}" if name in data_var.coords else name: data_var
-                for name, data_var in data_vars.items()
-            },
-            attrs={**scan_desc, "name": primary_dataset_name},
-        )
-
-    def postprocess_frame(self, frame: xr.Dataset):
-        frame = super().postprocess_frame(frame)
-
-        # J: TODO - make sure this works
         deg_to_rad_coords = {"beta", "theta", "psi"}
         for coord_name in deg_to_rad_coords:
             for data_type in [frame.coords, frame.attrs]:
@@ -784,7 +512,7 @@ def add_endstation(endstation_cls: type) -> None:
     _ENDSTATION_ALIASES[endstation_cls.PRINCIPAL_NAME] = endstation_cls
 
 
-def resolve_endstation(retry=True, **kwargs) -> type:
+def resolve_endstation(retry=True, **kwargs) -> EndstationBase:
     """Tries to determine which plugin to use for loading a piece of data.
 
     Args:
@@ -811,17 +539,11 @@ def resolve_endstation(retry=True, **kwargs) -> type:
     try:
         return endstation_from_alias(endstation_name)
     except KeyError:
-        if retry:
-            import arpes.config  # pylint: disable=redefined-outer-name
-
-            arpes.config.load_plugins()
-            return resolve_endstation(retry=False, **kwargs)
-        else:
-            raise ValueError(
-                "Could not identify endstation. "
-                "Did you set the endstation or location? Find a description of the available options "
-                "in the endstations module."
-            )
+        raise ValueError(
+            "Could not identify endstation. "
+            "Did you set the endstation or location? Find a description of the available options "
+            "in the endstations module."
+        )
 
 
 @traceable
@@ -865,6 +587,6 @@ def load_scan(
         pass
 
     trace(f"Loading {scan_desc}")
-    endstation = endstation_cls()
+    endstation: EndstationBase = endstation_cls()
     endstation.trace = trace
     return endstation.load(scan_desc, trace=trace, **kwargs)

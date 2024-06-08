@@ -1,4 +1,5 @@
 """Contains many common utility functions for managing matplotlib."""
+
 import collections
 import pickle
 import contextlib
@@ -6,7 +7,6 @@ from typing import List, Tuple, Union
 
 import datetime
 import re
-import errno
 import itertools
 import json
 import os.path
@@ -24,7 +24,7 @@ from matplotlib.lines import Line2D
 
 import xarray as xr
 from arpes import VERSION
-from arpes.config import CONFIG, SETTINGS, attempt_determine_workspace, is_using_tex
+from arpes import config
 from arpes.typing import DataType
 from arpes.utilities import normalize_to_spectrum
 from arpes.utilities.jupyter import get_recent_history, get_notebook_name
@@ -112,7 +112,9 @@ def mod_plot_to_ax(data, ax, mod, **kwargs):
         ax.plot(xs, ys, **kwargs)
 
 
-def h_gradient_fill(x1, x2, x_solid, fill_color=None, ax=None, zorder=None, alpha=None, **kwargs):
+def h_gradient_fill(
+    x1, x2, x_solid, fill_color=None, ax=None, zorder=None, alpha=None, **kwargs
+):
     """Fills a gradient between x1 and x2.
 
     If x_solid is not None, the gradient will be extended
@@ -146,7 +148,9 @@ def h_gradient_fill(x1, x2, x_solid, fill_color=None, ax=None, zorder=None, alph
     z[:, :, -1] = np.linspace(0, alpha, 100)[None, :]
 
     xmin, xmax, (ymin, ymax) = x1, x2, ylim
-    im = ax.imshow(z, aspect="auto", extent=[xmin, xmax, ymin, ymax], origin="lower", zorder=zorder)
+    im = ax.imshow(
+        z, aspect="auto", extent=[xmin, xmax, ymin, ymax], origin="lower", zorder=zorder
+    )
 
     if x_solid is not None:
         xlow, xhigh = (x2, x_solid) if x_solid > x2 else (x_solid, x1)
@@ -157,7 +161,9 @@ def h_gradient_fill(x1, x2, x_solid, fill_color=None, ax=None, zorder=None, alph
     return im
 
 
-def v_gradient_fill(y1, y2, y_solid, fill_color=None, ax=None, zorder=None, alpha=None, **kwargs):
+def v_gradient_fill(
+    y1, y2, y_solid, fill_color=None, ax=None, zorder=None, alpha=None, **kwargs
+):
     """Fills a gradient vertically between y1 and y2.
 
     If y_solid is not None, the gradient will be extended
@@ -191,7 +197,9 @@ def v_gradient_fill(y1, y2, y_solid, fill_color=None, ax=None, zorder=None, alph
     z[:, :, -1] = np.linspace(0, alpha, 100)[:, None]
 
     (xmin, xmax), ymin, ymax = xlim, y1, y2
-    im = ax.imshow(z, aspect="auto", extent=[xmin, xmax, ymin, ymax], origin="lower", zorder=zorder)
+    im = ax.imshow(
+        z, aspect="auto", extent=[xmin, xmax, ymin, ymax], origin="lower", zorder=zorder
+    )
 
     if y_solid is not None:
         ylow, yhigh = (y2, y_solid) if y_solid > y2 else (y_solid, y1)
@@ -341,7 +349,9 @@ def summarize(data: DataType, axes=None):
     }
 
     if axes is None:
-        fig, axes = plt.subplots(axes_shapes_for_dims.get(len(data.dims)), figsize=(8, 8))
+        fig, axes = plt.subplots(
+            axes_shapes_for_dims.get(len(data.dims)), figsize=(8, 8)
+        )
 
     flat_axes = axes.ravel()
     combinations = list(itertools.combinations(data.dims, 2))
@@ -366,13 +376,17 @@ def sum_annotation(eV=None, phi=None):
         return "{:.2f}".format(bound)
 
     if eV is not None:
-        if SETTINGS["use_tex"]:
-            eV_annotation = "$\\text{E}_{" + to_str(eV.start) + "}^{" + to_str(eV.stop) + "}$"
+        if config.SETTINGS["use_tex"]:
+            eV_annotation = (
+                "$\\text{E}_{" + to_str(eV.start) + "}^{" + to_str(eV.stop) + "}$"
+            )
         else:
             eV_annotation = to_str(eV.start) + " < E < " + to_str(eV.stop)
     if phi is not None:
-        if SETTINGS["use_tex"]:
-            phi_annotation = "$\\phi_{" + to_str(phi.start) + "}^{" + to_str(phi.stop) + "}$"
+        if config.SETTINGS["use_tex"]:
+            phi_annotation = (
+                "$\\phi_{" + to_str(phi.start) + "}^{" + to_str(phi.stop) + "}$"
+            )
         else:
             phi_annotation = to_str(phi.start) + " < φ < " + to_str(phi.stop)
 
@@ -390,17 +404,27 @@ def mean_annotation(eV=None, phi=None):
         return "{:.2f}".format(bound)
 
     if eV is not None:
-        if SETTINGS["use_tex"]:
+        if config.SETTINGS["use_tex"]:
             eV_annotation = (
-                "$\\bar{\\text{E}}_{" + to_str(eV.start) + "}^{" + to_str(eV.stop) + "}$"
+                "$\\bar{\\text{E}}_{"
+                + to_str(eV.start)
+                + "}^{"
+                + to_str(eV.stop)
+                + "}$"
             )
         else:
-            eV_annotation = "Mean<" + to_str(eV.start) + " < E < " + to_str(eV.stop) + ">"
+            eV_annotation = (
+                "Mean<" + to_str(eV.start) + " < E < " + to_str(eV.stop) + ">"
+            )
     if phi is not None:
-        if SETTINGS["use_tex"]:
-            phi_annotation = "$\\bar{\\phi}_{" + to_str(phi.start) + "}^{" + to_str(phi.stop) + "}$"
+        if config.SETTINGS["use_tex"]:
+            phi_annotation = (
+                "$\\bar{\\phi}_{" + to_str(phi.start) + "}^{" + to_str(phi.stop) + "}$"
+            )
         else:
-            phi_annotation = "Mean<" + to_str(phi.start) + " < φ < " + to_str(phi.stop) + ">"
+            phi_annotation = (
+                "Mean<" + to_str(phi.start) + " < φ < " + to_str(phi.stop) + ">"
+            )
 
     return eV_annotation + phi_annotation
 
@@ -431,7 +455,8 @@ LATEX_ESCAPE_MAP = {
 }
 LATEX_ESCAPE_REGEX = re.compile(
     "|".join(
-        re.escape(str(k)) for k in sorted(LATEX_ESCAPE_MAP.keys(), key=lambda item: -len(item))
+        re.escape(str(k))
+        for k in sorted(LATEX_ESCAPE_MAP.keys(), key=lambda item: -len(item))
     )
 )
 
@@ -454,7 +479,7 @@ def latex_escape(text: str, force: bool = False) -> str:
         The escaped string which should appear in LaTeX with the same
         contents as the original.
     """
-    if not is_using_tex() and not force:
+    if not matplotlib.rcParams["text.usetex"] and not force:
         return text
 
     # otherwise, we need to escape
@@ -502,7 +527,9 @@ def lineplot_arr(arr, ax=None, method="plot", mask=None, mask_kwargs=None, **kwa
         y_lim = ax.get_ylim()
         if isinstance(mask, list) and isinstance(mask[0], slice):
             for slice_mask in mask:
-                ax.fill_betweenx(y_lim, slice_mask.start, slice_mask.stop, **mask_kwargs)
+                ax.fill_betweenx(
+                    y_lim, slice_mask.start, slice_mask.stop, **mask_kwargs
+                )
         else:
             raise NotImplementedError
         ax.set_ylim(y_lim)
@@ -600,23 +627,36 @@ def imshow_arr(
             mappable = cm.ScalarMappable(cmap=cmap, norm=norm)
             mapped_colors = mappable.to_rgba(arr.values)
             mapped_colors[:, :, 3] = alpha
-            quad = ax.imshow(mapped_colors, origin=origin, extent=extent, aspect=aspect, **kwargs)
+            quad = ax.imshow(
+                mapped_colors, origin=origin, extent=extent, aspect=aspect, **kwargs
+            )
         else:
             quad = ax.imshow(
-                arr.values, origin=origin, extent=extent, aspect=aspect, cmap=cmap, **kwargs
+                arr.values,
+                origin=origin,
+                extent=extent,
+                aspect=aspect,
+                cmap=cmap,
+                **kwargs,
             )
         ax.grid(False)
         ax.set_xlabel(arr.dims[1])
         ax.set_ylabel(arr.dims[0])
     else:
         quad = ax.imshow(
-            arr.values, extent=over.get_extent(), aspect=ax.get_aspect(), origin=origin, **kwargs
+            arr.values,
+            extent=over.get_extent(),
+            aspect=ax.get_aspect(),
+            origin=origin,
+            **kwargs,
         )
 
     return ax, quad
 
 
-def dos_axes(orientation="horiz", figsize=None, with_cbar=True) -> Tuple[plt.Figure, plt.Axes]:
+def dos_axes(
+    orientation="horiz", figsize=None, with_cbar=True
+) -> Tuple[plt.Figure, plt.Axes]:
     """Makes axes corresponding to density of states data.
 
     This has one image like region and one small marginal for an EDC.
@@ -655,7 +695,9 @@ def dos_axes(orientation="horiz", figsize=None, with_cbar=True) -> Tuple[plt.Fig
     return fig, axes
 
 
-def inset_cut_locator(data, reference_data=None, ax=None, location=None, color=None, **kwargs):
+def inset_cut_locator(
+    data, reference_data=None, ax=None, location=None, color=None, **kwargs
+):
     """Plots a reference cut location over a figure.
 
     Another approach is to separately plot the locator and add it in Illustrator or
@@ -704,7 +746,9 @@ def inset_cut_locator(data, reference_data=None, ax=None, location=None, color=N
 
         return np.ones((n,)) * value
 
-    n_cut_dims = len([d for d in ordered_selector if isinstance(d, (collections.Iterable, slice))])
+    n_cut_dims = len(
+        [d for d in ordered_selector if isinstance(d, (collections.Iterable, slice))]
+    )
     ordered_selector = [resolve(d, v) for d, v in zip(data.dims, ordered_selector)]
 
     if missing_dims:
@@ -805,7 +849,7 @@ def phase_angle_colorbar(high=np.pi * 2, low=0, ax=None, **kwargs):
         "ticks": ["0", r"$\pi$", r"$2\pi$"],
     }
 
-    if not SETTINGS["use_tex"]:
+    if not config.SETTINGS["use_tex"]:
         extra_kwargs["ticks"] = ["0", "π", "2π"]
 
     extra_kwargs.update(kwargs)
@@ -928,7 +972,9 @@ generic_colorbarmap = (
 )
 
 
-def generic_colorbarmap_for_data(data: xr.DataArray, keep_ticks=True, ax=None, **kwargs):
+def generic_colorbarmap_for_data(
+    data: xr.DataArray, keep_ticks=True, ax=None, **kwargs
+):
     """Generates a colorbar and colormap which is useful in general context."""
     low, high = data.min().item(), data.max().item()
     ticks = None
@@ -1011,7 +1057,13 @@ class AnchoredHScaleBar(matplotlib.offsetbox.AnchoredOffsetbox):
             children=[size_bar, txt], align="center", pad=ppad, sep=sep
         )
         matplotlib.offsetbox.AnchoredOffsetbox.__init__(
-            self, loc, pad=pad, borderpad=borderpad, child=self.vpac, prop=prop, frameon=frameon
+            self,
+            loc,
+            pad=pad,
+            borderpad=borderpad,
+            child=self.vpac,
+            prop=prop,
+            frameon=frameon,
         )
 
 
@@ -1031,6 +1083,10 @@ def load_data_for_figure(p: Union[str, pathlib.Path]):
         data = pickle.load(f)
 
     return data
+
+
+def path_for_plot(desired_path):
+    raise NotImplementedError("This function is not yet implemented.")
 
 
 def savefig(desired_path, dpi=400, data=None, save_data=None, paper=False, **kwargs):
@@ -1064,14 +1120,23 @@ def savefig(desired_path, dpi=400, data=None, save_data=None, paper=False, **kwa
     if paper:
         # automatically generate useful file formats
         high_dpi = max(dpi, 400)
-        formats_for_paper = ["pdf", "png"]  # not including SVG anymore because files too large
+        formats_for_paper = [
+            "pdf",
+            "png",
+        ]  # not including SVG anymore because files too large
 
         for format in formats_for_paper:
             savefig(
-                f"{desired_path}-PAPER.{format}", dpi=high_dpi, data=data, paper=False, **kwargs
+                f"{desired_path}-PAPER.{format}",
+                dpi=high_dpi,
+                data=data,
+                paper=False,
+                **kwargs,
             )
 
-        savefig(f"{desired_path}-low-PAPER.pdf", dpi=200, data=data, paper=False, **kwargs)
+        savefig(
+            f"{desired_path}-low-PAPER.pdf", dpi=200, data=data, paper=False, **kwargs
+        )
 
         return
 
@@ -1118,49 +1183,6 @@ def savefig(desired_path, dpi=400, data=None, save_data=None, paper=False, **kwa
     plt.savefig(full_path, dpi=dpi, **kwargs)
 
 
-def path_for_plot(desired_path):
-    """Provides workspace and date scoped path generation for plots.
-
-    This is used to ensure that analysis products are grouped together
-    and organized in a reasonable way (by each day, together).
-
-    This will be used automatically if you use `arpes.plotting.utils.savefig`
-    instead of the one from matplotlib.
-    """
-    if not CONFIG["WORKSPACE"]:
-        attempt_determine_workspace()
-
-    workspace = CONFIG["WORKSPACE"]
-
-    if not workspace:
-        warnings.warn("Saving locally, no workspace found.")
-        return os.path.join(os.getcwd(), desired_path)
-
-    try:
-        import arpes.config
-
-        figure_path = arpes.config.FIGURE_PATH
-        if figure_path is None:
-            figure_path = os.path.join(workspace["path"], "figures")
-
-        filename = os.path.join(
-            figure_path, workspace["name"], datetime.date.today().isoformat(), desired_path
-        )
-        filename = str(pathlib.Path(filename).absolute())
-        parent_directory = os.path.dirname(filename)
-        if not os.path.exists(parent_directory):
-            try:
-                os.makedirs(parent_directory)
-            except OSError as exc:
-                if exc.errno != errno.EEXIST:
-                    raise exc
-
-        return filename
-    except Exception as e:
-        warnings.warn("Misconfigured FIGURE_PATH saving locally: {}".format(e))
-        return os.path.join(os.getcwd(), desired_path)
-
-
 def path_for_holoviews(desired_path):
     """Determines an appropriate output path for a holoviews save."""
     skip_paths = [".svg", ".png", ".jpeg", ".jpg", ".gif"]
@@ -1175,7 +1197,7 @@ def path_for_holoviews(desired_path):
 
 def name_for_dim(dim_name, escaped=True):
     """Alternate variant of `label_for_dim`."""
-    if SETTINGS["use_tex"]:
+    if config.SETTINGS["use_tex"]:
         name = {
             "temperature": "Temperature",
             "beta": r"$\beta$",
@@ -1216,7 +1238,7 @@ def name_for_dim(dim_name, escaped=True):
 
 def unit_for_dim(dim_name, escaped=True):
     """Calculate LaTeX or fancy display label for the unit associated to a dimension."""
-    if SETTINGS["use_tex"]:
+    if config.SETTINGS["use_tex"]:
         unit = {
             "temperature": "K",
             "theta": r"rad",
@@ -1271,7 +1293,9 @@ def label_for_colorbar(data):
         )
 
     derivative_records = [r for r in records if r["by"] == "dn_along_axis"]
-    c = Counter(itertools.chain(*[[d["axis"]] * d["order"] for d in derivative_records]))
+    c = Counter(
+        itertools.chain(*[[d["axis"]] * d["order"] for d in derivative_records])
+    )
 
     partial_frag = r""
     if sum(c.values()) > 1:
@@ -1293,7 +1317,7 @@ def label_for_colorbar(data):
 
 def label_for_dim(data=None, dim_name=None, escaped=True):
     """Generates a fancy label (LaTeX, if available) for a dimension according to standard conventions."""
-    if SETTINGS.get("use_tex", False):
+    if config.SETTINGS.get("use_tex", False):
         raw_dim_names = {
             "temperature": "Temperature",
             "theta": r"$\theta$",
@@ -1346,7 +1370,9 @@ def label_for_dim(data=None, dim_name=None, escaped=True):
     try:
         from titlecase import titlecase
     except ImportError:
-        warnings.warn("Using alternative titlecase, for better results `pip install titlecase`.")
+        warnings.warn(
+            "Using alternative titlecase, for better results `pip install titlecase`."
+        )
 
         def titlecase(s: str) -> str:
             """Poor man's titlecase.
@@ -1392,7 +1418,7 @@ def fancy_labels(ax_or_ax_set, data=None):
 
 def label_for_symmetry_point(point_name: str) -> str:
     """Determines the LaTeX label for a symmetry point shortcode."""
-    if SETTINGS["use_tex"]:
+    if config.SETTINGS["use_tex"]:
         proper_names = {
             "G": r"$\Gamma$",
             "X": r"X",
@@ -1430,7 +1456,9 @@ class CoincidentLinesPlot:
         self.has_drawn = False
 
         self.events = {
-            "resize_event": self.ax.figure.canvas.mpl_connect("resize_event", self._resize),
+            "resize_event": self.ax.figure.canvas.mpl_connect(
+                "resize_event", self._resize
+            ),
             "motion_notify_event": self.ax.figure.canvas.mpl_connect(
                 "motion_notify_event", self._resize
             ),
@@ -1439,7 +1467,9 @@ class CoincidentLinesPlot:
             ),
         }
         self.handles = []
-        self.lines = []  # saved args and kwargs for plotting, does not verify coincidence
+        self.lines = (
+            []
+        )  # saved args and kwargs for plotting, does not verify coincidence
 
     def add_line(self, *args, **kwargs):
         """Adds an additional line into the collection to be drawn."""
@@ -1457,7 +1487,8 @@ class CoincidentLinesPlot:
 
         offset_in_data_units = self.data_units_per_pixel * self.linewidth
         self.offsets = [
-            offset_in_data_units * (o - (len(self.lines) - 1) / 2) for o in range(len(self.lines))
+            offset_in_data_units * (o - (len(self.lines) - 1) / 2)
+            for o in range(len(self.lines))
         ]
 
         for offset, (line_args, line_kwargs) in zip(self.offsets, self.lines):

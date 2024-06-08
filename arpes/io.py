@@ -11,10 +11,9 @@ over a network and someone was willing to host a few larger pieces
 of data.
 """
 
-import pickle
 import warnings
 
-from typing import Any, List, Union, Optional
+from typing import List, Union, Optional
 from dataclasses import dataclass
 
 from pathlib import Path
@@ -22,7 +21,6 @@ from pathlib import Path
 import pandas as pd
 import xarray as xr
 
-import arpes.config
 from arpes.endstations import load_scan
 from arpes.typing import DataType
 
@@ -233,76 +231,3 @@ def export_dataset(dataset: xr.Dataset, path: Union[str, Path]):
 
 
 # TODO: J: add an import dataset function which converts bools/Nones back to their original types
-
-
-def file_for_pickle(name):
-    here = Path(".")
-
-    from arpes.config import CONFIG
-
-    if CONFIG["WORKSPACE"]:
-        here = Path(CONFIG["WORKSPACE"]["path"])
-
-    path = here / "picklejar" / "{}.pickle".format(name)
-    path.parent.mkdir(exist_ok=True)
-    return str(path)
-
-
-def load_pickle(name: str) -> Any:
-    """Loads a workspace local pickle. Inverse to `save_pickle`."""
-    with open(file_for_pickle(name), "rb") as file:
-        return pickle.load(file)
-
-
-def save_pickle(data: Any, name: str):
-    """Saves a workspace local pickle. Inverse to `load_pickle`."""
-    pickle.dump(data, open(file_for_pickle(name), "wb"))
-
-
-def easy_pickle(data_or_str: Any, name=None) -> Any:
-    """A convenience function around pickling.
-
-    Provides a workspace scoped associative set of named pickles which
-    can be used for
-
-    Examples:
-        Retaining analysis results between sessions.
-
-        Sharing results between workspaces.
-
-        Cacheing expensive or interim work.
-
-    For reproducibility reasons, you should generally prefer to
-    duplicate anaysis results using common code to prevent stale data
-    dependencies, but there are good reasons to use pickling as well.
-
-    This function knows whether we are pickling or unpickling depending on
-    whether one or two arguments are provided.
-
-    Args:
-        data_or_str: If saving, the data to be pickled. If loading, the name of the pickle to load.
-        name: If saving (non-None value), the name to associate. Defaults to None.
-
-    Returns:
-        None if name is not None, which indicates that we are saving data.
-        Otherwise, returns the unpickled value associated to `name`.
-    """
-    # we are loading data
-    if isinstance(data_or_str, str) or name is None:
-        return load_pickle(data_or_str)
-
-    # we are saving data
-    assert isinstance(name, str)
-    save_pickle(data_or_str, name)
-
-
-def list_pickles() -> List[str]:
-    """Generates a summary list of (workspace-local) pickled results and data.
-
-    Returns:
-        A list of the named pickles, suitable for passing to `easy_pickle`.
-    """
-    return [
-        str(s.stem)
-        for s in Path(file_for_pickle("just-a-pickle")).parent.glob("*.pickle")
-    ]

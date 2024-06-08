@@ -224,7 +224,7 @@ class QtTool(SimpleApp):
     def transpose(self, transpose_order: List[str]):
         """Transpose dimensions into the order specified by `transpose_order` and redraw."""
         reindex_order = [self.spectrum.dims.index(t) for t in transpose_order]
-        self.data = self.data.transpose(*transpose_order)
+        self.data = self.data.transpose(*transpose_order, ...)
 
         for widget in self.axis_info_widgets + self.binning_info_widgets:
             widget.recompute()

@@ -6,13 +6,12 @@ Think the album art for "Unknown Pleasures".
 import matplotlib.colors
 import matplotlib.pyplot as plt
 import numpy as np
-from math import ceil, inf
+from math import ceil
 from matplotlib import cm
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 import xarray as xr
 from arpes.analysis.general import rebin
-from arpes.plotting.tof import scatter_with_std
 from arpes.plotting.utils import (
     colorbarmaps_for_axis,
     generic_colorbarmap_for_data,
@@ -29,125 +28,6 @@ __all__ = (
     "flat_stack_plot",
     "offset_scatter_plot",
 )
-
-
-@save_plot_provenance
-def offset_scatter_plot(
-    data: DataType,
-    name_to_plot=None,
-    stack_axis=None,
-    fermi_level=True,
-    cbarmap=None,
-    ax=None,
-    out=None,
-    scale_coordinate=0.5,
-    ylim=None,
-    aux_errorbars=True,
-    **kwargs,
-):
-    """Makes a stack plot but which uses scatters rather than a lineplot for each curve in the set."""
-    assert isinstance(data, xr.Dataset)
-
-    if name_to_plot is None:
-        var_names = [k for k in data.data_vars.keys() if "_std" not in k]
-        assert len(var_names) == 1
-        name_to_plot = var_names[0]
-        assert (name_to_plot + "_std") in data.data_vars.keys()
-
-    if len(data.data_vars[name_to_plot].dims) != 2:
-        raise ValueError(
-            "In order to produce a stack plot, data must be image-like."
-            "Passed data included dimensions: {}".format(
-                data.data_vars[name_to_plot].dims
-            )
-        )
-
-    fig = None
-    inset_ax = None
-    if ax is None:
-        fig, ax = plt.subplots(
-            figsize=kwargs.get(
-                "figsize",
-                (
-                    11,
-                    5,
-                ),
-            )
-        )
-
-    if inset_ax is None:
-        inset_ax = inset_axes(ax, width="40%", height="5%", loc="upper left")
-
-    if stack_axis is None:
-        stack_axis = data.data_vars[name_to_plot].dims[0]
-
-    skip_colorbar = True
-    if cbarmap is None:
-        skip_colorbar = False
-        try:
-            cbarmap = colorbarmaps_for_axis[stack_axis]
-        except:
-            cbarmap = generic_colorbarmap_for_data(
-                data.coords[stack_axis], ax=inset_ax, ticks=kwargs.get("ticks")
-            )
-
-    cbar, cmap = cbarmap
-
-    if not isinstance(cmap, matplotlib.colors.Colormap):
-        # do our best
-        try:
-            cmap = cmap()
-        except:
-            # might still be fine
-            pass
-
-    # should be exactly two
-    other_dim = [d for d in data.dims if d != stack_axis][0]
-
-    if "eV" in data.dims and "eV" != stack_axis and fermi_level:
-        ax.axhline(0, linestyle="--", color="red")
-        ax.fill_betweenx([-1e6, 1e6], 0, 0.2, color="black", alpha=0.07)
-        ax.set_ylim(ylim)
-
-    # real plotting here
-    for i, (coord, value) in enumerate(data.G.iterate_axis(stack_axis)):
-        delta = data.G.stride(generic_dim_names=False)[other_dim]
-        data_for = value.copy(deep=True)
-        data_for.coords[other_dim] = data_for.coords[other_dim].copy(deep=True)
-        data_for.coords[other_dim].values = data_for.coords[other_dim].values.copy()
-        data_for.coords[other_dim].values -= i * delta * scale_coordinate / 10
-
-        scatter_with_std(data_for, name_to_plot, ax=ax, color=cmap(coord[stack_axis]))
-
-        if aux_errorbars:
-            assert ylim is not None
-            data_for = data_for.copy(deep=True)
-            flattened = data_for.data_vars[name_to_plot].copy(deep=True)
-            flattened.values = ylim[0] * np.ones(flattened.values.shape)
-            data_for = data_for.assign(**{name_to_plot: flattened})
-            scatter_with_std(
-                data_for, name_to_plot, ax=ax, color=cmap(coord[stack_axis]), fmt="none"
-            )
-
-    ax.set_xlabel(other_dim)
-    ax.set_ylabel(name_to_plot)
-    fancy_labels(ax)
-
-    try:
-        if inset_ax and not skip_colorbar:
-            inset_ax.set_xlabel(stack_axis, fontsize=16)
-
-            fancy_labels(inset_ax)
-            cbar(ax=inset_ax, **kwargs)
-    except TypeError:
-        # colorbar already rendered
-        pass
-
-    if out is not None:
-        plt.savefig(path_for_plot(out), dpi=400)
-        return path_for_plot(out)
-
-    return fig, ax
 
 
 @save_plot_provenance

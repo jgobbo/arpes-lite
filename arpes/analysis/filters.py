@@ -1,10 +1,12 @@
 """Provides coordinate aware filters and smoothing."""
+
 import copy
 
 import numpy as np
 from scipy import ndimage
 
 import xarray as xr
+from arpes.typing import DataType
 from arpes.provenance import provenance
 
 __all__ = (
@@ -15,11 +17,13 @@ __all__ = (
 )
 
 
-def gaussian_filter_arr(arr: xr.DataArray, sigma=None, n=1, default_size=1) -> xr.DataArray:
+def gaussian_filter_arr(
+    data: DataType, sigma=None, n=1, default_size=1
+) -> xr.DataArray:
     """Coordinate aware `scipy.ndimage.filters.gaussian_filter`.
 
     Args:
-        arr
+        data: Data to smooth.
         sigma: Kernel sigma, specified in terms of axis units. An axis that is not specified
           will have a kernel width of `default_size` in index units.
         n: Repeats n times.
@@ -30,36 +34,24 @@ def gaussian_filter_arr(arr: xr.DataArray, sigma=None, n=1, default_size=1) -> x
     Returns:
         Smoothed data.
     """
-    if sigma is None:
-        sigma = {}
+    spectrum: xr.DataArray = data.S.spectrum if isinstance(data, xr.Dataset) else data
 
-    sigma = {k: int(v / (arr.coords[k][1] - arr.coords[k][0])) for k, v in sigma.items()}
-    for dim in arr.dims:
+    sigma = {} if sigma is None else sigma
+    sigma = {
+        k: int(v / (spectrum.coords[k][1] - spectrum.coords[k][0]))
+        for k, v in sigma.items()
+    }
+    for dim in spectrum.dims:
         if dim not in sigma:
             sigma[dim] = default_size
+    sigma = tuple(sigma[k] for k in spectrum.dims)
 
-    sigma = tuple(sigma[k] for k in arr.dims)
-
-    values = arr.values
+    values = spectrum.values
     for _ in range(n):
         values = ndimage.filters.gaussian_filter(values, sigma)
 
-    filtered_arr = xr.DataArray(values, arr.coords, arr.dims, attrs=copy.deepcopy(arr.attrs))
-
-    if "id" in filtered_arr.attrs:
-        del filtered_arr.attrs["id"]
-
-        provenance(
-            filtered_arr,
-            arr,
-            {
-                "what": "Gaussian filtered data",
-                "by": "gaussian_filter_arr",
-                "sigma": sigma,
-            },
-        )
-
-    return filtered_arr
+    filtered_spectrum = xr.DataArray(values, spectrum.coords, spectrum.dims)
+    return filtered_spectrum
 
 
 def gaussian_filter(sigma=None, n=1):
@@ -142,7 +134,9 @@ def boxcar_filter_arr(
         for i in range(n):
             values = ndimage.filters.uniform_filter(values, size)
 
-    filtered_arr = xr.DataArray(values, arr.coords, arr.dims, attrs=copy.deepcopy(arr.attrs))
+    filtered_arr = xr.DataArray(
+        values, arr.coords, arr.dims, attrs=copy.deepcopy(arr.attrs)
+    )
 
     if "id" in arr.attrs:
         del filtered_arr.attrs["id"]

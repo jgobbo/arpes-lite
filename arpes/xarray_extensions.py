@@ -2908,6 +2908,14 @@ class ARPESDatasetAccessor(ARPESAccessorBase):
 
         arpes.plotting.qt_tool.qt_tool(self._obj, detached=detached, **kwargs)
 
+    def selsum(self, **kwargs):
+        """Selects and sums over dimensions.
+
+        Args:
+            kwargs: Passed to `xr.Dataset.sel` and `xr.Dataset.sum`
+        """
+        return self._obj.sel(kwargs).sum(tuple(kwargs.keys()))
+
     def polarization_plot(self, **kwargs) -> plt.Axes:
         """Creates a spin polarization plot.
 

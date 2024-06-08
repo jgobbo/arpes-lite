@@ -140,11 +140,13 @@ class MAESTROMicroARPESEndstation(MAESTROARPESEndstationBase):
 
         data_vars = list(data.data_vars.keys())
         spectra_names = [data_var for data_var in data_vars if "Spectra" in data_var]
-        # J: TODO - figure out a priorty for which spectrum to set as default
+
         max_dims = 0
         for spectrum_name in spectra_names:
             if n_dims := len(data[spectrum_name].dims) > max_dims:
                 max_dims = n_dims
                 data.attrs["spectrum_name"] = spectrum_name
+        data = data.rename_vars({data.attrs["spectrum_name"]: "intensity"})
+        data.attrs["spectrum_name"] = "intensity"
 
         return data
