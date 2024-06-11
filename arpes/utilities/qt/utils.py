@@ -2,7 +2,6 @@
 
 import enum
 from dataclasses import dataclass
-from typing import List
 from PyQt5 import QtWidgets
 
 __all__ = ["PlotOrientation", "ReactivePlotRecord"]
@@ -17,11 +16,11 @@ class PlotOrientation(str, enum.Enum):
 
 @dataclass
 class ReactivePlotRecord:
-    """This contains metadata related to a reactive plot or marginal on a DataArary.
-
-    This is used to know how to update and mount corresponding widgets on a main tool view.
+    """
+    This contains metadata related to a reactive plot or marginal on a DataArary. This
+    is used to know how to update and mount corresponding widgets on a main tool view.
     """
 
-    dims: List[str]
+    dims: list[str]
     view: QtWidgets.QWidget
     orientation: PlotOrientation

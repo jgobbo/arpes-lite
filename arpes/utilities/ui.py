@@ -1,4 +1,5 @@
-"""Easily composable and reactive UI utilities using RxPy and PyQt5.
+"""
+Easily composable and reactive UI utilities using RxPy and PyQt5.
 
 This makes UI prototyping *MUCH* faster. In order to log IDs so that you can 
 attach subscriptions after the fact, you will need to use the CollectUI
@@ -26,19 +27,20 @@ with CollectUI(ui):
     )
 ```
 
-"Forms" can effectively be built by building an observable out of the subjects in the UI. 
-We have a `submit` function that makes creating such an observable simple.
+"Forms" can effectively be built by building an observable out of the subjects in the 
+UI. We have a `submit` function that makes creating such an observable simple.
 
 ```
 submit('submit', ['check', 'slider', 'file'], ui).subscribe(lambda item: print(item))
 ```
 
-With the line above, whenever the button with id='submit' is pressed, we will log a dictionary 
-with the most recent values of the inputs {'check','slider','file'} as a dictionary with these 
-keys. This allows building PyQt5 "forms" without effort.
+With the line above, whenever the button with id='submit' is pressed, we will log a 
+dictionary with the most recent values of the inputs {'check','slider','file'} as a 
+dictionary with these keys. This allows building PyQt5 "forms" without effort.
 """
+
 from enum import Enum
-from typing import Type
+from typing import Type, Callable
 
 import enum
 
@@ -47,8 +49,9 @@ import rx
 
 import pyqtgraph as pg
 
-from typing import Dict, List, Optional
+from typing import Optional
 from collections import namedtuple
+from dataclasses import dataclass
 
 import functools
 from PyQt5.QtWidgets import (
@@ -95,15 +98,36 @@ __all__ = (
     # @dataclass utils
     "layout_dataclass",
     "bind_dataclass",
-    # Keybinding
     "PRETTY_KEYS",
     "pretty_key_event",
+    "Key",
+    "KeyboardModifier",
     "KeyBinding",
 )
 
+Key = Qt.Key
+KeyboardModifier = Qt.KeyboardModifier
 
-KeyBinding = namedtuple("KeyBinding", ("label", "chord", "handler"))
-CursorMode = namedtuple("CursorMode", ("label", "chord", "handler", "supported_dimensions"))
+
+@dataclass
+class KeyBinding:
+    """
+    A keybinding for the application.
+
+    Args:
+        label: A human readable description of the keybinding.
+        chord: A list of keys that can be pressed to trigger the handler.
+        handler: The function to call when the keybinding is triggered.
+    """
+
+    label: str
+    chord: list[Key]
+    handler: Callable
+
+
+CursorMode = namedtuple(
+    "CursorMode", ("label", "chord", "handler", "supported_dimensions")
+)
 
 PRETTY_KEYS = {}
 for key, value in vars(QtCore.Qt).items():
@@ -111,8 +135,8 @@ for key, value in vars(QtCore.Qt).items():
         PRETTY_KEYS[value] = key.partition("_")[2]
 
 
-def pretty_key_event(event) -> List[str]:
-    """Key Event -> List[str] in order to be able to prettily print keys.
+def pretty_key_event(event) -> list[str]:
+    """Key Event -> list[str] in order to be able to prettily print keys.
 
     Args:
         event
@@ -339,7 +363,9 @@ def text_edit(text="", *args) -> QWidget:
 
 
 @ui_builder
-def numeric_input(value=0, input_type: type = float, *args, validator_settings=None) -> QWidget:
+def numeric_input(
+    value=0, input_type: type = float, *args, validator_settings=None
+) -> QWidget:
     """A numeric input with input validation."""
     validators = {
         int: QtGui.QIntValidator,
@@ -361,7 +387,9 @@ def numeric_input(value=0, input_type: type = float, *args, validator_settings=N
         validator_settings = default_settings.get(input_type)
 
     widget = SubjectiveLineEdit(str(value), *args)
-    widget.setValidator(validators.get(input_type, QtGui.QIntValidator)(**validator_settings))
+    widget.setValidator(
+        validators.get(input_type, QtGui.QIntValidator)(**validator_settings)
+    )
 
     return widget
 
@@ -377,10 +405,10 @@ def _unwrap_subject(subject_or_widget):
         return subject_or_widget
 
 
-def submit(gate: str, keys: List[str], ui: Dict[str, QWidget]) -> rx.Observable:
-    """Builds an observable with provides the values of `keys` as a dictionary when `gate` changes.
-
-    Essentially models form submission in HTML.
+def submit(gate: str, keys: list[str], ui: dict[str, QWidget]) -> rx.Observable:
+    """
+    Builds an observable with provides the values of `keys` as a dictionary when `gate`
+    changes. Essentially models form submission in HTML.
     """
     if isinstance(gate, str):
         gate = ui[gate]
@@ -404,7 +432,7 @@ def _try_unwrap_value(v):
         return v
 
 
-def enum_option_names(enum_cls: Type[enum.Enum]) -> List[str]:
+def enum_option_names(enum_cls: Type[enum.Enum]) -> list[str]:
     names = [x for x in dir(enum_cls) if "__" not in x]
     values = [_try_unwrap_value(getattr(enum_cls, n)) for n in names]
 
@@ -467,19 +495,23 @@ def layout_dataclass(dataclass_cls, prefix: Optional[str] = None) -> QWidget:
     )
 
 
-def bind_dataclass(dataclass_instance, prefix: str, ui: Dict[str, QWidget]):
-    """One-way data binding between a dataclass instance and a collection of widgets in the UI.
+def bind_dataclass(dataclass_instance, prefix: str, ui: dict[str, QWidget]):
+    """
+    One-way data binding between a dataclass instance and a collection of widgets in the
+    UI.
 
     Sets the current UI state to the value of the Python dataclass instance, and sets up
-    subscriptions to value changes on the UI so that any future changes are propagated to
-    the dataclass instance.
+    subscriptions to value changes on the UI so that any future changes are propagated
+    to the dataclass instance.
 
     Args:
         dataclass_instance: Instance to link
         prefix: Prefix for widget IDs in the UI
         ui: Collected UI elements
     """
-    relevant_widgets = {k.split(prefix)[1]: v for k, v in ui.items() if k.startswith(prefix)}
+    relevant_widgets = {
+        k.split(prefix)[1]: v for k, v in ui.items() if k.startswith(prefix)
+    }
     for field_name, field in dataclass_instance.__dataclass_fields__.items():
         translate_from_field, translate_to_field = {
             int: (lambda x: str(x), lambda x: int(x)),
@@ -523,7 +555,11 @@ def bind_dataclass(dataclass_instance, prefix: str, ui: Dict[str, QWidget]):
 
 
 class CursorRegion(pg.LinearRegionItem):
-    """A wide cursor to support an indication of the binning width in image marginals."""
+    """
+    A wide cursor to support an indication of the binning width in image marginals.
+    """
+
+    sigRegionChanged: QtCore.pyqtBoundSignal
 
     def __init__(self, *args, **kwargs):
         """Start with a width of one pixel."""
@@ -532,12 +568,19 @@ class CursorRegion(pg.LinearRegionItem):
         self.lines[1].setMovable(False)
 
     def set_width(self, value):
-        """Adjusts the region by moving the right boundary to a distance `value` from the left."""
+        """
+        Adjusts the region by moving the right boundary to a distance `value` from the
+        left.
+        """
         self._region_width = value
-        self.lineMoved(0)
+        start, _ = self.getRegion()
+        self.setRegion((start, start + value))
 
     def lineMoved(self, i):
-        """Issues that the region for the cursor changed when one line on the boundary moves."""
+        """
+        Issues that the region for the cursor changed when one line on the boundary
+        moves.
+        """
         if self.blockLineSignal:
             return
 
@@ -545,13 +588,15 @@ class CursorRegion(pg.LinearRegionItem):
         self.prepareGeometryChange()
         self.sigRegionChanged.emit(self)
 
-    def set_location(self, value):
-        """Sets the location of the cursor without issuing signals.
+    # shouldn't be used, but here until FitTool is refactored
+    def set_location(self, value: tuple[float, float]):
+        """
+        Sets the location of the cursor without issuing signals.
 
         Retains the width of the region so that you can just drag the wide cursor around.
         """
         old = self.blockLineSignal
         self.blockLineSignal = True
-        self.lines[1].setValue(value + self._region_width)
-        self.lines[0].setValue(value + self._region_width)
+        self.lines[0].setValue(value[0])
+        self.lines[1].setValue(value[1])
         self.blockLineSignal = old

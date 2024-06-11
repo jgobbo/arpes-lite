@@ -1,4 +1,5 @@
 """Provides a Qt based implementation of a curve fit inspection tool."""
+
 from arpes.plotting.qt_tool.BinningInfoWidget import BinningInfoWidget
 from arpes.utilities.qt.utils import PlotOrientation, ReactivePlotRecord
 from PyQt5 import QtGui, QtCore, QtWidgets
@@ -235,7 +236,9 @@ class FitTool(SimpleApp):
             The 1D marginal will have a cursor and binning controls on that cursor.
         """
         if len(self.data.dims) == 2:  # 1 broadcast dimension and one data dimension
-            self.generate_marginal_for((), 0, 0, "xy", cursors=True, layout=self.content_layout)
+            self.generate_marginal_for(
+                (), 0, 0, "xy", cursors=True, layout=self.content_layout
+            )
             self.generate_fit_marginal_for(
                 (0, 1),
                 0,
@@ -248,15 +251,21 @@ class FitTool(SimpleApp):
             self.views["xy"].view.setYLink(self.views["fit"].inner_plot)
 
         if len(self.data.dims) == 3:
-            self.generate_marginal_for((2,), 1, 0, "xy", cursors=True, layout=self.content_layout)
+            self.generate_marginal_for(
+                (2,), 1, 0, "xy", cursors=True, layout=self.content_layout
+            )
             self.generate_fit_marginal_for(
                 (0, 1, 2), 0, 0, "fit", cursors=True, layout=self.content_layout
             )
 
         if len(self.data.dims) == 4:
             # no idea if these marginal locations are correct, need to check that
-            self.generate_marginal_for((1, 3), 1, 0, "xz", cursors=True, layout=self.content_layout)
-            self.generate_marginal_for((2, 3), 0, 1, "xy", cursors=True, layout=self.content_layout)
+            self.generate_marginal_for(
+                (1, 3), 1, 0, "xz", cursors=True, layout=self.content_layout
+            )
+            self.generate_marginal_for(
+                (2, 3), 0, 1, "xy", cursors=True, layout=self.content_layout
+            )
             self.generate_marginal_for((0, 3), 1, 1, "yz", layout=self.content_layout)
             self.generate_fit_marginal_for(
                 (0, 1, 2, 3), 0, 0, "fit", cursors=True, layout=self.content_layout
@@ -280,10 +289,14 @@ class FitTool(SimpleApp):
         if layout is None:
             layout = self._layout
 
-        remaining_dims = [l for l in list(range(len(self.data.dims))) if l not in dimensions]
+        remaining_dims = [
+            l for l in list(range(len(self.data.dims))) if l not in dimensions
+        ]
 
         # for now, we only allow a single fit dimension
-        widget = FitInspectionPlot(name=name, root=weakref.ref(self), orientation=orientation)
+        widget = FitInspectionPlot(
+            name=name, root=weakref.ref(self), orientation=orientation
+        )
         self.views[name] = widget
 
         if orientation == PlotOrientation.Horizontal:
@@ -293,9 +306,11 @@ class FitTool(SimpleApp):
 
         if cursors:
             cursor = CursorRegion(
-                orientation=CursorRegion.Vertical
-                if orientation == PlotOrientation.Vertical
-                else CursorRegion.Horizontal,
+                orientation=(
+                    CursorRegion.Vertical
+                    if orientation == PlotOrientation.Vertical
+                    else CursorRegion.Horizontal
+                ),
                 movable=True,
             )
             widget.addItem(cursor, ignoreBounds=False)
@@ -341,12 +356,17 @@ class FitTool(SimpleApp):
             c = self.data.coords[d].values
             return c[0] + value * (c[1] - c[0])
 
-        self.context["value_cursor"] = [index_to_value(v, i) for i, v in enumerate(new_cursor)]
+        self.context["value_cursor"] = [
+            index_to_value(v, i) for i, v in enumerate(new_cursor)
+        ]
 
-        changed_dimensions = [i for i, (x, y) in enumerate(zip(old_cursor, new_cursor)) if x != y]
+        changed_dimensions = [
+            i for i, (x, y) in enumerate(zip(old_cursor, new_cursor)) if x != y
+        ]
 
         cursor_text = ",".join(
-            "{}: {:.4g}".format(x, y) for x, y in zip(self.data.dims, self.context["value_cursor"])
+            "{}: {:.4g}".format(x, y)
+            for x, y in zip(self.data.dims, self.context["value_cursor"])
         )
         self.window.statusBar().showMessage("({})".format(cursor_text))
 
@@ -373,7 +393,9 @@ class FitTool(SimpleApp):
                         zip(
                             [self.data.dims[i] for i in reactive.dims],
                             [
-                                safe_slice(int(new_cursor[i]), int(new_cursor[i] + 1), i)
+                                safe_slice(
+                                    int(new_cursor[i]), int(new_cursor[i] + 1), i
+                                )
                                 for i in reactive.dims
                             ],
                         )
@@ -385,7 +407,9 @@ class FitTool(SimpleApp):
                         reactive.view.setImage(image_data, keep_levels=keep_levels)
                     elif isinstance(reactive.view, FitInspectionPlot):
                         results_coord = {
-                            k: v for k, v in select_coord.items() if k in self.dataset.results.dims
+                            k: v
+                            for k, v in select_coord.items()
+                            if k in self.dataset.results.dims
                         }
                         result = self.dataset.results.isel(**results_coord)
                         result = result.item()
@@ -412,14 +436,16 @@ class FitTool(SimpleApp):
                         if reactive.orientation == PlotOrientation.Horizontal:
                             reactive.view.plot(for_plot.values)
                         else:
-                            reactive.view.plot(for_plot.values, range(len(for_plot.values)))
+                            reactive.view.plot(
+                                for_plot.values, range(len(for_plot.values))
+                            )
                 except IndexError:
                     pass
 
     def construct_binning_tab(self):
         """Gives tab controls for the axis along the fit only."""
         inner_items = [
-            BinningInfoWidget(axis_index=len(self.data.dims) - 1, root=weakref.ref(self))
+            BinningInfoWidget(axis_name=len(self.data.dims) - 1, root=weakref.ref(self))
         ]
         return horizontal(label("Options"), *inner_items), inner_items
 
@@ -477,12 +503,16 @@ class FitTool(SimpleApp):
         )
 
         # Display the data
-        self.update_cursor_position(self.context["cursor"], force=True, keep_levels=False)
+        self.update_cursor_position(
+            self.context["cursor"], force=True, keep_levels=False
+        )
         self.center_cursor()
 
     def reset_intensity(self):
         """Autoscales intensity in each marginal plot."""
-        self.update_cursor_position(self.context["cursor"], force=True, keep_levels=False)
+        self.update_cursor_position(
+            self.context["cursor"], force=True, keep_levels=False
+        )
 
     def set_data(self, data: xr.Dataset):
         """Sets the current data to a new value and resets UI state."""

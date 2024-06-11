@@ -3,26 +3,27 @@
 # pylint: disable=import-error
 
 from arpes.utilities.qt.utils import PlotOrientation
-from PyQt5 import QtGui, QtCore, QtWidgets
-import pyqtgraph as pg
+from PyQt5 import QtGui, QtWidgets
 import numpy as np
 import xarray as xr
 import weakref
 import warnings
-import dill
-from typing import List, Union
+from typing import Union, override
+from collections import defaultdict
 
-import arpes.config
-import arpes.xarray_extensions
-from arpes.utilities import normalize_to_spectrum
 from arpes.typing import DataType
-from arpes.utilities.qt.data_array_image_view import DataArrayPlot
 
-from arpes.utilities.ui import KeyBinding, horizontal, vertical, tabs, CursorRegion
+from arpes.utilities.ui import (
+    KeyBinding,
+    Key,
+    KeyboardModifier,
+    horizontal,
+    vertical,
+    tabs,
+)
 from arpes.utilities.qt import (
     qt_info,
     run_tool_in_daemon_process,
-    DataArrayImageView,
     BasicHelpDialog,
     SimpleWindow,
     SimpleApp,
@@ -40,11 +41,13 @@ qt_info.setup_pyqtgraph()
 
 
 class QtToolWindow(SimpleWindow):
-    """The application window for `QtTool`.
+    """
+    The application window for `QtTool`.
 
-    QtToolWindow was the first Qt-Based Tool that I built for PyARPES. Much of its structure was ported
-    to SimpleWindow and borrowed ideas from when I wrote DAQuiri. As a result, the structure is essentially
-    now to define just the handlers and any lifecycle hooks (close, etc.)
+    QtToolWindow was the first Qt-Based Tool that I built for PyARPES. Much of its
+    structure was ported to SimpleWindow and borrowed ideas from when I wrote DAQuiri.
+    As a result, the structure is essentially now to define just the handlers and any
+    lifecycle hooks (close, etc.)
     """
 
     HELP_DIALOG_CLS = BasicHelpDialog
@@ -56,39 +59,39 @@ class QtToolWindow(SimpleWindow):
             KeyBinding(
                 "Scroll Cursor",
                 [
-                    QtCore.Qt.Key_Left,
-                    QtCore.Qt.Key_Right,
-                    QtCore.Qt.Key_Up,
-                    QtCore.Qt.Key_Down,
+                    Key.Key_Left,
+                    Key.Key_Right,
+                    Key.Key_Up,
+                    Key.Key_Down,
                 ],
                 self.scroll,
             ),
             KeyBinding(
                 "Reset Intensity",
-                [QtCore.Qt.Key_I],
+                [Key.Key_I],
                 self.reset_intensity,
             ),
             KeyBinding(
                 "Scroll Z-Cursor",
                 [
-                    QtCore.Qt.Key_N,
-                    QtCore.Qt.Key_M,
+                    Key.Key_N,
+                    Key.Key_M,
                 ],
                 self.scroll_z,
             ),
             KeyBinding(
                 "Center Cursor",
-                [QtCore.Qt.Key_C],
+                [Key.Key_C],
                 self.center_cursor,
             ),
             KeyBinding(
                 "Transpose - Roll Axis",
-                [QtCore.Qt.Key_Y],
+                [Key.Key_Y],
                 self.transpose_roll,
             ),
             KeyBinding(
                 "Transpose - Swap Front Axes",
-                [QtCore.Qt.Key_T],
+                [Key.Key_T],
                 self.transpose_swap,
             ),
         ]
@@ -102,51 +105,39 @@ class QtToolWindow(SimpleWindow):
     def transpose_swap(self, event):
         self.app().transpose_to_front(1)
 
-    @staticmethod
-    def _update_scroll_delta(delta, event: QtGui.QKeyEvent):
-        if event.nativeModifiers() & 1:  # shift key
-            delta = (delta[0], delta[1] * 5)
-
-        if event.nativeModifiers() & 2:  # shift key
-            delta = (delta[0], delta[1] * 20)
-
-        return delta
-
     def reset_intensity(self, event: QtGui.QKeyEvent):
         self.app().reset_intensity()
 
     def get_increment(self, event: QtGui.QKeyEvent):
-        if event.modifiers() & QtCore.Qt.ShiftModifier:
+        if event.modifiers() & KeyboardModifier.ShiftModifier:
             return self.SCROLL_INCREMENT * self.INCREMENT_MULTIPLIER
-        elif event.modifiers() & QtCore.Qt.ControlModifier:
+        elif event.modifiers() & KeyboardModifier.ControlModifier:
             return self.SCROLL_INCREMENT // self.INCREMENT_MULTIPLIER
         return self.SCROLL_INCREMENT
 
     def scroll_z(self, event: QtGui.QKeyEvent):
         key_map = {
-            QtCore.Qt.Key_N: (2, -1),
-            QtCore.Qt.Key_M: (2, 1),
+            Key.Key_N: (2, -1),
+            Key.Key_M: (2, 1),
         }
 
-        delta = key_map.get(event.key())
-        delta = (delta[0], delta[1] * self.get_increment(event))
-
+        dim_i, delta = key_map.get(event.key())
+        delta *= self.get_increment(event)
         if delta is not None and self.app() is not None:
-            self.app().scroll(delta)
+            self.app().scroll(dim_i, delta)
 
     def scroll(self, event: QtGui.QKeyEvent):
         key_map = {
-            QtCore.Qt.Key_Left: (0, -1),
-            QtCore.Qt.Key_Right: (0, 1),
-            QtCore.Qt.Key_Down: (1, -1),
-            QtCore.Qt.Key_Up: (1, 1),
+            Key.Key_Left: (0, -1),
+            Key.Key_Right: (0, 1),
+            Key.Key_Down: (1, -1),
+            Key.Key_Up: (1, 1),
         }
 
-        delta = key_map.get(event.key())
-        delta = (delta[0], delta[1] * self.get_increment(event))
-
+        dim_i, delta = key_map.get(event.key())
+        delta *= self.get_increment(event)
         if delta is not None and self.app() is not None:
-            self.app().scroll(delta)
+            self.app().scroll(dim_i, delta)
 
 
 class QtTool(SimpleApp):
@@ -174,72 +165,118 @@ class QtTool(SimpleApp):
 
         self._binning = None
 
+    @override
+    def update_cursor_position(self, new_cursor, **kwargs):
+        super().update_cursor_position(new_cursor, **kwargs)
+
+        for widget in self.axis_info_widgets + self.binning_info_widgets:
+            widget.recompute()
+
     def center_cursor(self):
         """Scrolls so that the cursors are in the center of the data volume."""
-        new_cursor = [len(self.spectrum.coords[d]) / 2 for d in self.spectrum.dims]
-        self.update_cursor_position(new_cursor)
+        centers = {dim: self.spectrum.sizes[dim] / 2 for dim in self.spectrum.dims}
+        new_cursor = {
+            dim: (center - self._binning[dim] / 2, center + self._binning[dim] / 2)
+            for dim, center in centers.items()
+        }
 
-        for i, cursors in self.registered_cursors.items():
+        # self.update_cursor_position(new_cursor)
+        for dim, cursors in self.registered_cursors.items():
             for cursor in cursors:
-                cursor.set_location(new_cursor[i])
+                cursor.setRegion(new_cursor[dim])
 
-    def scroll(self, delta):
+    def scroll(self, dim_i: int, delta: int):
         """Scroll the axis delta[0] by delta[1] pixels."""
-        if delta[0] >= len(self.context["cursor"]):
+        if dim_i >= len(self.context["cursor"]):
             warnings.warn("Tried to scroll a non-existent dimension.")
             return
 
-        cursor = list(self.context["cursor"])
-        cursor[delta[0]] += delta[1]
+        def clamp(positions: tuple[float, float], dim: str):
+            start, end = positions
+            if start < 0:
+                start = 0
+                end = self._binning[dim]
+            elif end > self.spectrum.sizes[dim]:
+                end = self.spectrum.sizes[dim]
+                start = end - self._binning[dim]
+            return start, end
 
-        self.update_cursor_position(cursor)
+        dim = self.spectrum.dims[dim_i]
+        cursor = self.context["cursor"].copy()
+        new_cursor_position = tuple(
+            old_position + delta for old_position in cursor[dim]
+        )
+        cursor[dim] = clamp(new_cursor_position, dim)
 
-        for i, cursors in self.registered_cursors.items():
-            for c in cursors:
-                c.set_location(cursor[i])
+        for dim_cursor in self.registered_cursors[dim]:
+            dim_cursor.setRegion(cursor[dim])
 
     @property
     def binning(self):
         """The binning on each axis in pixels."""
         if self._binning is None:
-            return [1 for _ in self.spectrum.dims]
+            return {dim: 1 for dim in self.spectrum.dims}
 
-        return list(self._binning)
+        return self._binning
 
     @binning.setter
-    def binning(self, value):
+    def binning(self, values: dict[str, int]):
         """Set the desired axis binning."""
-        different_binnings = [
-            i for i, (nv, v) in enumerate(zip(value, self._binning)) if nv != v
-        ]
-        self._binning = value
+        different_binnings = {
+            dim: n_bins
+            for dim, n_bins in values.items()
+            if n_bins != self._binning[dim]
+        }
+        self._binning = values
 
-        for i in different_binnings:
-            cursors = self.registered_cursors.get(i)
+        for dim in different_binnings:
+            cursors = self.registered_cursors[dim]
             for cursor in cursors:
-                cursor.set_width(self._binning[i])
+                cursor.set_width(self._binning[dim])
 
-        self.update_cursor_position(self.context["cursor"], force=True)
+    def change_cursor_dims(self, dim_mapping: dict[str, str]) -> None:
+        old_cursors = self.registered_cursors
+        self.registered_cursors = defaultdict(list)
+        for old_dim, cursor_list in old_cursors.items():
+            new_dim = dim_mapping[old_dim]
+            new_bounds = [0, self.spectrum.sizes[new_dim]]
+            new_width = self.binning[new_dim]
+            for cursor in cursor_list:
+                cursor.setBounds(new_bounds)
+                cursor.set_width(new_width)
+                self.reconnect_cursor(new_dim, cursor)
 
-    def transpose(self, transpose_order: List[str]):
-        """Transpose dimensions into the order specified by `transpose_order` and redraw."""
-        reindex_order = [self.spectrum.dims.index(t) for t in transpose_order]
-        self.data = self.data.transpose(*transpose_order, ...)
+    def transpose(self, transpose_order: list[str]):
+        """
+        Transpose dimensions into the order specified by `transpose_order` and redraw.
+        """
+        original_order = list(self.spectrum.dims)
+        dim_mapping = {
+            original_dim: new_dim
+            for original_dim, new_dim in zip(original_order, transpose_order)
+        }
+        self.spectrum = self.spectrum.transpose(*transpose_order, ...)
+
+        for reactive_view in self.reactive_views:
+            old_dims = reactive_view.dims
+            reactive_view.dims = tuple(dim_mapping[dim] for dim in old_dims)
 
         for widget in self.axis_info_widgets + self.binning_info_widgets:
             widget.recompute()
 
-        new_cursor = [self.context["cursor"][i] for i in reindex_order]
-        self.update_cursor_position(new_cursor, force=True)
-
-        for i, cursors in self.registered_cursors.items():
+        self.change_cursor_dims(dim_mapping)
+        cursor_positions = self.context["cursor"]
+        for dim, cursors in self.registered_cursors.items():
             for cursor in cursors:
-                cursor.set_location(new_cursor[i])
+                cursor.setRegion(cursor_positions[dim])
+
+        self.update_reactive_views(force=True, keep_levels=False)
 
     def transpose_to_front(self, dim: Union[str, int]):
-        """Transpose the dimension `dim` to the front so that it is in the main marginal."""
-        if not isinstance(dim, str):
-            dim = self.spectrum.dims[dim]
+        """
+        Transpose the dimension `dim` to the front so that it is in the main marginal.
+        """
+        dim = dim if isinstance(dim, str) else self.spectrum.dims[dim]
 
         order = list(self.spectrum.dims)
         order.remove(dim)
@@ -247,7 +284,8 @@ class QtTool(SimpleApp):
         self.transpose(order)
 
     def configure_image_widgets(self):
-        """Configure array marginals for the input data.
+        """
+        Configure array marginals for the input data.
 
         Depending on the array dimensionality, we need a different number and variety
         of marginals. This is as easy as specifying which marginals we select over and
@@ -255,12 +293,13 @@ class QtTool(SimpleApp):
 
         An additional complexity is that we also handle the cursor registration here.
         """
-        if len(self.spectrum.dims) == 2:
+        dims = self.spectrum.dims
+        if len(dims) == 2:
             self.generate_marginal_for(
                 (), 1, 0, "xy", cursors=True, layout=self.content_layout
             )
             self.generate_marginal_for(
-                (1,),
+                (dims[1],),
                 0,
                 0,
                 "x",
@@ -268,7 +307,7 @@ class QtTool(SimpleApp):
                 layout=self.content_layout,
             )
             self.generate_marginal_for(
-                (0,),
+                (dims[0],),
                 1,
                 1,
                 "y",
@@ -279,9 +318,9 @@ class QtTool(SimpleApp):
             self.views["xy"].view.setYLink(self.views["y"])
             self.views["xy"].view.setXLink(self.views["x"])
 
-        if len(self.spectrum.dims) == 3:
+        if len(dims) == 3:
             self.generate_marginal_for(
-                (1, 2),
+                (dims[1], dims[2]),
                 0,
                 0,
                 "x",
@@ -289,22 +328,21 @@ class QtTool(SimpleApp):
                 layout=self.content_layout,
             )
             self.generate_marginal_for(
-                (1,), 1, 0, "xz", cursors=True, layout=self.content_layout
+                (dims[1],), 1, 0, "xz", cursors=True, layout=self.content_layout
             )
             self.generate_marginal_for(
-                (2,), 2, 0, "xy", cursors=True, layout=self.content_layout
+                (dims[2],), 2, 0, "xy", cursors=True, layout=self.content_layout
             )
             self.generate_marginal_for(
-                (0, 1),
-                0,
+                (dims[0], dims[1]),
+                1,
                 1,
                 "z",
                 orientation=PlotOrientation.Horizontal,
-                cursors=True,
                 layout=self.content_layout,
             )
             self.generate_marginal_for(
-                (0, 2),
+                (dims[0], dims[2]),
                 2,
                 2,
                 "y",
@@ -312,7 +350,7 @@ class QtTool(SimpleApp):
                 layout=self.content_layout,
             )
             self.generate_marginal_for(
-                (0,), 2, 1, "yz", cursors=True, layout=self.content_layout
+                (dims[0],), 2, 1, "yz", cursors=True, layout=self.content_layout
             )
 
             self.views["xy"].view.setYLink(self.views["y"])
@@ -320,146 +358,33 @@ class QtTool(SimpleApp):
             self.views["xz"].view.setXLink(self.views["z"])
             self.views["xz"].view.setXLink(self.views["xy"].view)
 
-        if len(self.spectrum.dims) == 4:
-            self.generate_marginal_for((1, 3), 0, 0, "xz", layout=self.content_layout)
+        if len(dims) == 4:
             self.generate_marginal_for(
-                (2, 3), 1, 0, "xy", cursors=True, layout=self.content_layout
+                (dims[1], dims[3]), 0, 0, "xz", layout=self.content_layout
             )
-            self.generate_marginal_for((0, 2), 1, 1, "yz", layout=self.content_layout)
             self.generate_marginal_for(
-                (0, 1), 0, 1, "zw", cursors=True, layout=self.content_layout
+                (dims[2], dims[3]), 1, 0, "xy", cursors=True, layout=self.content_layout
             )
-
-    def connect_cursor(self, dimension, the_line):
-        """Connect a cursor to a line control.
-
-        without weak references we get a circular dependency here
-        because `the_line` is owned by a child of `self` but we are
-        providing self to a closure which is retained by `the_line`.
-        """
-        self.registered_cursors[dimension].append(the_line)
-        owner = weakref.ref(self)
-
-        def connected_cursor(line: CursorRegion):
-            new_cursor = list(owner().context["cursor"])
-            new_cursor[dimension] = line.getRegion()[0]
-            owner().update_cursor_position(new_cursor)
-
-        the_line.sigRegionChanged.connect(connected_cursor)
-
-    def update_cursor_position(self, new_cursor, force=False, keep_levels=True):
-        """Sets the current cursor position.
-
-        Because setting the cursor position changes the marginal data, this is also
-        where redrawing originates.
-
-        The way we do this is basically to step through views, recompute the slice for that view
-        and set the image/array on the slice.
-        """
-        old_cursor = list(self.context["cursor"])
-        self.context["cursor"] = new_cursor
-
-        def index_to_value(value, i):
-            d = self.spectrum.dims[i]
-            c = self.spectrum.coords[d].values
-            return c[0] + value * (c[1] - c[0])
-
-        self.context["value_cursor"] = [
-            index_to_value(v, i) for i, v in enumerate(new_cursor)
-        ]
-
-        changed_dimensions = [
-            i for i, (x, y) in enumerate(zip(old_cursor, new_cursor)) if x != y
-        ]
-
-        cursor_text = ",".join(
-            f"{x}: {y:.4g}"
-            for x, y in zip(self.spectrum.dims, self.context["value_cursor"])
-        )
-        self.window.statusBar().showMessage(f"({cursor_text})")
-
-        # update axis info widgets
-        for widget in self.axis_info_widgets + self.binning_info_widgets:
-            widget.recompute()
-
-        # update data
-        def safe_slice(vlow, vhigh, axis=0):
-            vlow, vhigh = int(min(vlow, vhigh)), int(max(vlow, vhigh))
-            rng = len(self.spectrum.coords[self.spectrum.dims[axis]])
-            vlow, vhigh = np.clip(vlow, 0, rng), np.clip(vhigh, 0, rng)
-
-            if vlow == vhigh:
-                vhigh = vlow + 1
-
-            vlow, vhigh = np.clip(vlow, 0, rng), np.clip(vhigh, 0, rng)
-
-            if vlow == vhigh:
-                vlow = vhigh - 1
-
-            return slice(vlow, vhigh)
-
-        for reactive in self.reactive_views:
-            if set(reactive.dims).intersection(set(changed_dimensions)) or force:
-                try:
-                    select_coord = dict(
-                        zip(
-                            [self.spectrum.dims[i] for i in reactive.dims],
-                            [
-                                safe_slice(
-                                    int(new_cursor[i]),
-                                    int(new_cursor[i] + self.binning[i]),
-                                    i,
-                                )
-                                for i in reactive.dims
-                            ],
-                        )
-                    )
-                    if isinstance(reactive.view, DataArrayImageView):
-                        image_data = self.spectrum.isel(**select_coord)
-                        if select_coord:
-                            image_data = image_data.mean(list(select_coord.keys()))
-                        reactive.view.setImage(image_data, keep_levels=keep_levels)
-
-                    elif isinstance(reactive.view, pg.PlotWidget):
-                        for_plot = self.spectrum.isel(**select_coord)
-                        if select_coord:
-                            for_plot = for_plot.mean(list(select_coord.keys()))
-
-                        cursors = [
-                            l
-                            for l in reactive.view.getPlotItem().items
-                            if isinstance(l, CursorRegion)
-                        ]
-                        reactive.view.clear()
-                        for c in cursors:
-                            reactive.view.addItem(c)
-
-                        if isinstance(reactive.view, DataArrayPlot):
-                            reactive.view.plot(for_plot)
-                            continue
-
-                        if reactive.orientation == PlotOrientation.Horizontal:
-                            reactive.view.plot(for_plot.values)
-                        else:
-                            reactive.view.plot(
-                                for_plot.values, range(len(for_plot.values))
-                            )
-                except IndexError:
-                    pass
+            self.generate_marginal_for(
+                (dims[0], dims[2]), 1, 1, "yz", layout=self.content_layout
+            )
+            self.generate_marginal_for(
+                (dims[0], dims[1]), 0, 1, "zw", cursors=True, layout=self.content_layout
+            )
 
     def construct_axes_tab(self):
         """Controls for axis order and transposition."""
         inner_items = [
-            AxisInfoWidget(axis_index=i, root=weakref.ref(self))
-            for i in range(len(self.spectrum.dims))
+            AxisInfoWidget(axis_name=axis_name, root=weakref.ref(self))
+            for axis_name in self.spectrum.dims
         ]
         return horizontal(*inner_items), inner_items
 
     def construct_binning_tab(self):
         """This tab controls the degree of binning around the cursor."""
         inner_items = [
-            BinningInfoWidget(axis_index=i, root=weakref.ref(self))
-            for i in range(len(self.spectrum.dims))
+            BinningInfoWidget(axis_name=dim, root=weakref.ref(self))
+            for dim in self.spectrum.dims
         ]
 
         return horizontal(*inner_items), inner_items
@@ -519,9 +444,7 @@ class QtTool(SimpleApp):
         # basic state initialization
         self.context.update(
             {
-                "cursor": [
-                    self.spectrum.coords[d].mean().item() for d in self.spectrum.dims
-                ],
+                "cursor": {dim: (0, 1) for dim in self.spectrum.dims},
             }
         )
 
@@ -531,28 +454,20 @@ class QtTool(SimpleApp):
 
     def reset_intensity(self):
         """Autoscales intensity in each marginal plot."""
-        self.update_cursor_position(
-            self.context["cursor"], force=True, keep_levels=False
-        )
+        self.update_reactive_views(force=True, keep_levels=False)
 
     def set_data(self, data: xr.Dataset):
         """Sets the current data to a new value and resets binning."""
-        # data = normalize_to_spectrum(data)
 
-        # if np.any(np.isnan(data)):
-        #     warnings.warn("Nan values encountered, copying data and assigning zeros.")
-        #     data = data.fillna(0)
+        if np.any(np.isnan(data)):
+            data = data.fillna(0)
 
         self.data = data
-        self._binning = [1 for _ in self.spectrum.dims]
+        self._binning = {dim: 1 for dim in self.spectrum.dims}
 
 
 def _qt_tool(data: DataType, **kwargs):
     """Starts the qt_tool using an input spectrum."""
-    try:
-        data = dill.loads(data)
-    except TypeError:
-        pass
 
     tool = QtTool()
     tool.set_data(data)

@@ -6,12 +6,12 @@ from PyQt5 import QtGui, QtCore, QtWidgets
 
 from arpes.config import SETTINGS
 from arpes.utilities.excepthook import patched_excepthook
-from arpes.utilities.ui import KeyBinding
+from arpes.utilities.ui import KeyBinding, Key
 
 __all__ = ("SimpleWindow",)
 
 
-class SimpleWindow(QtWidgets.QMainWindow, QtCore.QObject):
+class SimpleWindow(QtWidgets.QMainWindow):
     """Provides a relatively simple way of making a windowed application.
 
     The following utilities are largely managed for you:
@@ -51,8 +51,8 @@ class SimpleWindow(QtWidgets.QMainWindow, QtCore.QObject):
         Additional keybindings can be added here as requied by the tool.
         """
         return [
-            KeyBinding("Close Window", [QtCore.Qt.Key_Escape], self.do_close),
-            KeyBinding("Toggle Help", [QtCore.Qt.Key_H], self.toggle_help),
+            KeyBinding("Close Window", [Key.Key_Escape], self.do_close),
+            KeyBinding("Toggle Help", [Key.Key_H], self.toggle_help),
         ]
 
     def compile_cursor_modes(self):
@@ -72,21 +72,10 @@ class SimpleWindow(QtWidgets.QMainWindow, QtCore.QObject):
         self.app().close()
         super().close()
 
-    def eventFilter(self, source, event):
+    def eventFilter(self, source, event: QtGui.QKeyEvent):
         """Neglect Qt events which do not relate to key presses for now."""
-        special_keys = [
-            QtCore.Qt.Key_Down,
-            QtCore.Qt.Key_Up,
-            QtCore.Qt.Key_Left,
-            QtCore.Qt.Key_Right,
-        ]
-
-        if event.type() in [QtCore.QEvent.KeyPress, QtCore.QEvent.ShortcutOverride]:
-            if (
-                event.type() != QtCore.QEvent.ShortcutOverride
-                or event.key() in special_keys
-            ):
-                self.handleKeyPressEvent(event)
+        if event.type() == QtCore.QEvent.KeyPress:
+            self.handleKeyPressEvent(event)
 
         return super().eventFilter(source, event)
 

@@ -4,17 +4,25 @@ from PyQt5 import QtWidgets
 
 from arpes.utilities.ui import layout
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from weakref import ReferenceType
+    from arpes.plotting.qt_tool import QtTool
+
 __all__ = ("BinningInfoWidget",)
 
 
 class BinningInfoWidget(QtWidgets.QGroupBox):
     """A spinbox allowing you to set the binning on different axes."""
 
-    def __init__(self, parent=None, root=None, axis_index=None):
+    def __init__(
+        self, parent=None, root: "ReferenceType" = None, axis_name: str = None
+    ):
         """Initialize an inner spinbox and connect signals to get reactivity."""
-        super().__init__(title=str(axis_index), parent=parent)
+        super().__init__(title=axis_name, parent=parent)
         self._root = root
-        self.axis_index = axis_index
+        self.axis_name = axis_name
 
         self.spinbox = QtWidgets.QSpinBox()
         self.spinbox.setMaximum(2000)
@@ -31,19 +39,19 @@ class BinningInfoWidget(QtWidgets.QGroupBox):
         self.recompute()
 
     @property
-    def root(self):
+    def root(self) -> "QtTool":
         """Unwraps the weakref to the parent application."""
         return self._root()
 
     def recompute(self):
         """Redraws all dependent UI state, namely the title."""
-        self.setTitle(self.root.spectrum.dims[self.axis_index])
+        self.setTitle(self.axis_name)
 
     def changeBinning(self):
         """Callback for widget value changes which sets the binning on the root app."""
         try:
-            old_binning = self.root.binning
-            old_binning[self.axis_index] = self.spinbox.value()
+            old_binning = self.root.binning.copy()
+            old_binning[self.axis_name] = self.spinbox.value()
             self.root.binning = old_binning
         except:
             pass

@@ -29,4 +29,4 @@ results_root = root / "results" / sample_name
 
 plt.rcParams["image.cmap"] = "magma"
 
-SETTINGS = {"use_tex": False}
+SETTINGS = {"use_tex": False, "DEBUG": True}

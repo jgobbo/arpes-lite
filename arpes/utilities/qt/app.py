@@ -2,10 +2,11 @@
 
 from PyQt5 import QtWidgets
 import pyqtgraph as pg
+from math import floor
 import numpy as np
-import typing
 import xarray as xr
 import weakref
+from typing import Any, TYPE_CHECKING
 
 from collections import defaultdict
 
@@ -15,11 +16,17 @@ from .utils import PlotOrientation, ReactivePlotRecord
 
 from arpes.config import SETTINGS
 
+if TYPE_CHECKING:
+    from .windows import SimpleWindow
+
 __all__ = ["SimpleApp"]
 
 
 class SimpleApp:
-    """Has all of the layout information and business logic for an interactive data browsing utility using PyQt5."""
+    """
+    Has all of the layout information and business logic for an interactive data
+    browsing utility using PyQt5.
+    """
 
     WINDOW_CLS = None
     WINDOW_SIZE = (4, 4)
@@ -38,14 +45,12 @@ class SimpleApp:
         self.context = {}
 
         self.views = {}
-        self.reactive_views = []
-        self.registered_cursors: typing.Dict[typing.List[CursorRegion]] = defaultdict(
-            list
-        )
+        self.reactive_views: list[ReactivePlotRecord] = []
+        self.registered_cursors: dict[str, list[CursorRegion]] = defaultdict(list)
 
         self.settings = SETTINGS.copy()
 
-    def copy_to_clipboard(self, value: typing.Any) -> None:
+    def copy_to_clipboard(self, value: Any) -> None:
         """Attempts to copy the value to the clipboard, or else prints."""
         try:
             import pyperclip
@@ -61,9 +66,10 @@ class SimpleApp:
 
     @property
     def data(self) -> xr.Dataset:
-        """Read data from the cached attribute.
+        """
+        Read data from the cached attribute.
 
-        This is a propety as opposed to a plain attribute
+        This is a property as opposed to a plain attribute
         in order to facilitate rendering datasets with several
         data_vars.
         """
@@ -75,7 +81,9 @@ class SimpleApp:
         self.spectrum = new_data.S.spectrum if new_data is not None else None
 
     def close(self):
-        """Graceful shutdown. Tell each view to close and drop references so GC happens."""
+        """
+        Graceful shutdown. Tell each view to close and drop references so GC happens.
+        """
         for v in self.views.values():
             v.close()
 
@@ -84,7 +92,9 @@ class SimpleApp:
 
     @property
     def ninety_eight_percentile(self):
-        """Calculates the 98 percentile of data so colorscale is not outlier dependent."""
+        """
+        Calculates the 98 percentile of data so colorscale is not outlier dependent.
+        """
         if self._ninety_eight_percentile is not None:
             return self._ninety_eight_percentile
 
@@ -104,13 +114,7 @@ class SimpleApp:
         from the colormap and convert it into an array suitable for pyqtgraph.
         """
         sampling_array = np.linspace(0, 1, 5)
-        sampled_colormap = colormap(sampling_array)
-
-        # need to scale colors if pyqtgraph is older.
-        if pg.__version__.split(".")[1] != "10":
-            sampled_colormap = (
-                sampled_colormap * 255
-            )  # super frustrating undocumented change
+        sampled_colormap = colormap(sampling_array) * 255
 
         return pg.ColorMap(
             pos=np.linspace(0, 1, len(sampled_colormap)), color=sampled_colormap
@@ -130,24 +134,23 @@ class SimpleApp:
 
     def generate_marginal_for(
         self,
-        dimensions,
-        column,
-        row,
-        name=None,
-        orientation=PlotOrientation.Horizontal,
-        cursors=False,
+        dimensions: tuple[str],
+        row: int,
+        column: int,
+        name: str = None,
+        orientation: PlotOrientation = PlotOrientation.Horizontal,
+        cursors: bool = False,
         layout=None,
     ):
-        """Generates a marginal plot for this applications's data after selecting along `dimensions`.
-
-        This is used to generate the many different views of a volume in the browsable tools.
+        """
+        Generates a marginal plot for this applications's data after selecting along
+        `dimensions`. This is used to generate the many different views of a volume in
+        the browsable tools.
         """
         if layout is None:
             layout = self._layout
 
-        remaining_dims = [
-            l for l in list(range(len(self.spectrum.dims))) if l not in dimensions
-        ]
+        remaining_dims = [dim for dim in self.spectrum.dims if dim not in dimensions]
 
         if len(remaining_dims) == 1:
             widget = DataArrayPlot(
@@ -161,6 +164,7 @@ class SimpleApp:
                 widget.setMaximumWidth(200)
 
             if cursors:
+                remaining_dim = remaining_dims[0]
                 cursor = CursorRegion(
                     orientation=(
                         CursorRegion.Horizontal
@@ -168,35 +172,177 @@ class SimpleApp:
                         else CursorRegion.Vertical
                     ),
                     movable=True,
+                    bounds=[
+                        0,
+                        self.spectrum.sizes[remaining_dim],
+                    ],
                 )
                 widget.addItem(cursor, ignoreBounds=False)
-                self.connect_cursor(remaining_dims[0], cursor)
+                self.connect_cursor(remaining_dim, cursor)
         else:
             assert len(remaining_dims) == 2
             widget = DataArrayImageView(name=name, root=weakref.ref(self))
             widget.view.setAspectLocked(False)
             self.views[name] = widget
 
+            # TODO: set the bottom level intelligently
             widget.setHistogramRange(0, self.ninety_eight_percentile)
             widget.setLevels(0.05, 0.95)
 
             if cursors:
-                cursor_vert = CursorRegion(
-                    orientation=CursorRegion.Vertical, movable=True
-                )
-                cursor_horiz = CursorRegion(
-                    orientation=CursorRegion.Horizontal, movable=True
-                )
-                widget.addItem(cursor_vert, ignoreBounds=True)
-                widget.addItem(cursor_horiz, ignoreBounds=True)
-                self.connect_cursor(remaining_dims[0], cursor_vert)
-                self.connect_cursor(remaining_dims[1], cursor_horiz)
+                for dim, orientation in zip(
+                    remaining_dims, [CursorRegion.Vertical, CursorRegion.Horizontal]
+                ):
+                    cursor = CursorRegion(
+                        orientation=orientation,
+                        movable=True,
+                        bounds=[0, self.spectrum.sizes[dim]],
+                    )
+                    widget.addItem(cursor, ignoreBounds=True)
+                    self.connect_cursor(dim, cursor)
 
         self.reactive_views.append(
             ReactivePlotRecord(dims=dimensions, view=widget, orientation=orientation)
         )
-        layout.addWidget(widget, column, row)
+        layout.addWidget(widget, row, column)
         return widget
+
+    def connect_cursor(self, dimension: str, the_line: CursorRegion) -> None:
+        """Connect a cursor to a line control.
+
+        without weak references we get a circular dependency here
+        because `the_line` is owned by a child of `self` but we are
+        providing self to a closure which is retained by `the_line`.
+        """
+        self.registered_cursors[dimension].append(the_line)
+        owner = weakref.ref(self)
+
+        def connected_cursor(line: CursorRegion):
+            new_cursor = owner().context["cursor"].copy()
+            new_cursor[dimension] = line.getRegion()
+            owner().update_cursor_position(new_cursor)
+
+        the_line.sigRegionChanged.connect(connected_cursor)
+
+    def reconnect_cursor(self, dimension: str, the_line: CursorRegion) -> None:
+        """
+        Reconnect a cursor to a line control. User must remove the line from
+        registered_cursors before calling this function or there will be a duplicate.
+        """
+        the_line.sigRegionChanged.disconnect()
+        self.connect_cursor(dimension, the_line)
+
+    def update_cursor_position(
+        self, new_cursor: dict[str, tuple[float, float]], **kwargs
+    ) -> None:
+        """
+        Sets the current cursor positions. If the cursor has changed, this also
+        updates all reactive views.
+
+        Args:
+            new_cursor: The new cursor positions.
+            kwargs: Additional arguments to pass to `update_reactive_views`.
+        """
+        old_cursor = self.context["cursor"].copy()
+        changed_dimensions = set(
+            dim for dim in new_cursor if new_cursor[dim] != old_cursor[dim]
+        )
+        if not changed_dimensions:
+            return
+        self.context["cursor"] = new_cursor
+
+        def indices_to_values(indices: float, dim: str):
+            coord_values = self.spectrum.coords[dim].values
+
+            # TODO: interpolate for irregularly spaced coords
+            def index_to_value(index):
+                return coord_values[0] + index * (coord_values[1] - coord_values[0])
+
+            return tuple(index_to_value(index) for index in indices)
+
+        self.context["value_cursor"] = {
+            dim: indices_to_values(indices, dim) for dim, indices in new_cursor.items()
+        }
+        cursor_text = " ".join(
+            f"{dim}:({values[0]:.3g}, {values[1]:.3g})"
+            for dim, values in self.context["value_cursor"].items()
+        )
+        self.window.statusBar().showMessage(cursor_text)
+
+        self.update_reactive_views(
+            changed_dimensions=changed_dimensions,
+            **kwargs,
+        )
+
+    def update_reactive_views(
+        self,
+        coord_slices: dict[str, slice] = None,
+        changed_dimensions: set[str] = None,
+        force=False,
+        keep_levels=True,
+    ):
+        """
+        Updates all reactive views based on the specified slices.
+
+        Args:
+            coord_slices: The slices to apply to the data.
+            changed_dimensions: The dimensions that have changed.
+            force: If true, will update all views regardless of whether they have
+                changed.
+            keep_levels: If true, will keep the existing colormap levels.
+        """
+        if coord_slices is None:
+            cursor: dict[str, tuple[float, float]] = self.context["cursor"]
+            coord_slices = {dim: slice(*position) for dim, position in cursor.items()}
+        changed_dimensions = set() if changed_dimensions is None else changed_dimensions
+
+        def safe_slice(unsafe_slice: slice, dim: str):
+            start, stop = floor(unsafe_slice.start), floor(unsafe_slice.stop)
+            dim_length = self.spectrum.sizes[dim]
+            start, stop = np.clip(start, 0, dim_length), np.clip(stop, 0, dim_length)
+            if start == stop:
+                stop = start + 1
+            start, stop = np.clip(start, 0, dim_length), np.clip(stop, 0, dim_length)
+            if start == stop:
+                start = stop - 1
+            return slice(start, stop)
+
+        safe_slices = {
+            dim: safe_slice(unsafe_slice, dim)
+            for dim, unsafe_slice in coord_slices.items()
+        }
+        for reactive in self.reactive_views:
+            if set(reactive.dims).intersection(changed_dimensions) or force:
+                reactive_slices = {dim: safe_slices[dim] for dim in reactive.dims}
+
+                if isinstance(reactive.view, DataArrayImageView):
+                    image_data = self.spectrum.isel(**reactive_slices)
+                    if reactive_slices:
+                        image_data = image_data.mean(list(reactive_slices.keys()))
+                    reactive.view.setImage(image_data, keep_levels=keep_levels)
+
+                elif isinstance(reactive.view, pg.PlotWidget):
+                    for_plot = self.spectrum.isel(**reactive_slices)
+                    if reactive_slices:
+                        for_plot = for_plot.mean(list(reactive_slices.keys()))
+
+                    cursors = [
+                        plot_item
+                        for plot_item in reactive.view.getPlotItem().items
+                        if isinstance(plot_item, CursorRegion)
+                    ]
+                    reactive.view.clear()
+                    for cursor in cursors:
+                        reactive.view.addItem(cursor)
+
+                    if isinstance(reactive.view, DataArrayPlot):
+                        reactive.view.plot(for_plot)
+                        continue
+
+                    if reactive.orientation == PlotOrientation.Horizontal:
+                        reactive.view.plot(for_plot.values)
+                    else:
+                        reactive.view.plot(for_plot.values, range(len(for_plot.values)))
 
     def before_show(self):
         """Lifecycle hook."""
@@ -214,7 +360,7 @@ class SimpleApp:
         raise NotImplementedError
 
     @property
-    def window(self):
+    def window(self) -> "SimpleWindow":
         """Gets the window instance on the current application."""
         return self._window
 
@@ -225,7 +371,6 @@ class SimpleApp:
             app = QtWidgets.QApplication([])
 
         app.owner = self
-        # self.app = app
 
         from arpes.utilities.qt import qt_info
 

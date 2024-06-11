@@ -1,4 +1,5 @@
 """Provides xarray aware pyqtgraph plotting widgets."""
+
 # pylint: disable=import-error
 import pyqtgraph as pg
 import numpy as np
@@ -36,7 +37,10 @@ class DataArrayPlot(pg.PlotWidget):
     """A plot for 1D xr.DataArray instances with a coordinate aware axis."""
 
     def __init__(self, root, orientation, *args, **kwargs):
-        """Use custom axes so that we can provide coordinate-ful rather than pixel based values."""
+        """
+        Use custom axes so that we can provide coordinate-ful rather than pixel based
+        values.
+        """
         self.orientation = orientation
 
         axis_or = "bottom" if orientation == PlotOrientation.Horizontal else "left"
@@ -55,22 +59,34 @@ class DataArrayPlot(pg.PlotWidget):
 
         if self.orientation == PlotOrientation.Horizontal:
             return self.plotItem.plot(
-                np.arange(0, len(y)), y, pen=pg.mkPen(color=(68, 1, 84), width=3), *args, **kwargs
+                np.arange(0, len(y)),
+                y,
+                pen=pg.mkPen(color=(68, 1, 84), width=3),
+                *args,
+                **kwargs
             )
         else:
             return self.plotItem.plot(
-                y, np.arange(0, len(y)), pen=pg.mkPen(color=(68, 1, 84), width=3), *args, **kwargs
+                y,
+                np.arange(0, len(y)),
+                pen=pg.mkPen(color=(68, 1, 84), width=3),
+                *args,
+                **kwargs
             )
 
 
 class DataArrayImageView(pg.ImageView):
-    """ImageView that transparently handles xarray data, including setting axis and coordinate information.
-
-    This makes it easier to build interactive applications around realistic scientific datasets.
+    """
+    ImageView that transparently handles xarray data, including setting axis and
+    coordinate information. This makes it easier to build interactive applications
+    around realistic scientific datasets.
     """
 
     def __init__(self, root, *args, **kwargs):
-        """Use custom axes so that we can provide coordinate-ful rather than pixel based values."""
+        """
+        Use custom axes so that we can provide coordinate-ful rather than pixel based
+        values.
+        """
         self._coord_axes = {
             "left": CoordAxis(dim_index=1, orientation="left"),
             "bottom": CoordAxis(dim_index=0, orientation="bottom"),
