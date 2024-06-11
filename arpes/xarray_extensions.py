@@ -1856,9 +1856,9 @@ class ARPESDataArrayAccessor(ARPESAccessorBase):
 
     def show(self, detached=False, **kwargs):
         """Opens the Qt based image tool."""
-        import arpes.plotting.qt_tool
+        import arpes.qt_tools.image_tool
 
-        arpes.plotting.qt_tool.qt_tool(self._obj, detached=detached, **kwargs)
+        arpes.qt_tools.image_tool.image_tool(self._obj, detached=detached, **kwargs)
 
     def show_d2(self, **kwargs):
         """Opens the Bokeh based second derivative image tool."""
@@ -2904,9 +2904,9 @@ class ARPESDatasetAccessor(ARPESAccessorBase):
 
     def show(self, detached=False, **kwargs):
         """Opens the Qt based image tool."""
-        import arpes.plotting.qt_tool
+        import arpes.qt_tools.image_tool
 
-        arpes.plotting.qt_tool.qt_tool(self._obj, detached=detached, **kwargs)
+        arpes.qt_tools.image_tool.image_tool(self._obj, detached=detached, **kwargs)
 
     def selsum(self, **kwargs):
         """Selects and sums over dimensions.

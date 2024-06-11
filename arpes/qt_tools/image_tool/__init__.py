@@ -33,14 +33,14 @@ from .AxisInfoWidget import AxisInfoWidget
 from .BinningInfoWidget import BinningInfoWidget
 
 __all__ = (
-    "QtTool",
-    "qt_tool",
+    "ImageTool",
+    "image_tool",
 )
 
 qt_info.setup_pyqtgraph()
 
 
-class QtToolWindow(SimpleWindow):
+class ImageToolWindow(SimpleWindow):
     """
     The application window for `QtTool`.
 
@@ -140,7 +140,7 @@ class QtToolWindow(SimpleWindow):
             self.app().scroll(dim_i, delta)
 
 
-class QtTool(SimpleApp):
+class ImageTool(SimpleApp):
     """QtTool is an implementation of Image/Bokeh Tool based on PyQtGraph and PyQt5.
 
     For now we retain a number of the metaphors from BokehTool, including a "context"
@@ -148,7 +148,7 @@ class QtTool(SimpleApp):
     """
 
     TITLE = "Qt Tool"
-    WINDOW_CLS = QtToolWindow
+    WINDOW_CLS = ImageToolWindow
     WINDOW_SIZE = (12, 10)
 
     def __init__(self):
@@ -466,12 +466,12 @@ class QtTool(SimpleApp):
         self._binning = {dim: 1 for dim in self.spectrum.dims}
 
 
-def _qt_tool(data: DataType, **kwargs):
+def _image_tool(data: DataType, **kwargs):
     """Starts the qt_tool using an input spectrum."""
 
-    tool = QtTool()
+    tool = ImageTool()
     tool.set_data(data)
     tool.start(**kwargs)
 
 
-qt_tool = run_tool_in_daemon_process(_qt_tool)
+image_tool = run_tool_in_daemon_process(_image_tool)

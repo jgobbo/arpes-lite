@@ -6,7 +6,7 @@ from PyQt5 import QtWidgets
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from arpes.plotting.qt_tool import QtTool
+    from arpes.qt_tools.image_tool import ImageTool
     from weakref import ReferenceType
 
 __all__ = ("AxisInfoWidget",)
@@ -36,7 +36,7 @@ class AxisInfoWidget(QtWidgets.QGroupBox):
         self.recompute()
 
     @property
-    def root(self) -> "QtTool":
+    def root(self) -> "ImageTool":
         """Unwraps the weakref to the parent application."""
         return self._root()
 

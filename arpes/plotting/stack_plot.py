@@ -26,7 +26,7 @@ from arpes.utilities import normalize_to_spectrum
 __all__ = (
     "stack_dispersion_plot",
     "flat_stack_plot",
-    "offset_scatter_plot",
+    "overlapped_stack_dispersion_plot",
 )
 
 
@@ -145,7 +145,6 @@ def flat_stack_plot(
     return fig, ax
 
 
-@save_plot_provenance
 def stack_dispersion_plot(
     data: DataType, stack_axis: str = None, data_scaling: float = 2.0, **kwargs
 ):

@@ -27,7 +27,6 @@ from arpes.typing import DataType
 __all__ = (
     "load_data",
     "load_example_data",
-    "easy_pickle",
     "list_pickles",
     "stitch",
 )

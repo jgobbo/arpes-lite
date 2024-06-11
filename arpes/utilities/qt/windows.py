@@ -4,7 +4,7 @@ import sys
 
 from PyQt5 import QtGui, QtCore, QtWidgets
 
-from arpes.config import SETTINGS
+from arpes.settings import SETTINGS
 from arpes.utilities.excepthook import patched_excepthook
 from arpes.utilities.ui import KeyBinding, Key
 

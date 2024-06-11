@@ -1,4 +1,5 @@
 """Infrastructure code for interactive Bokeh based analysis tools."""
+
 import json
 import os
 import warnings
@@ -7,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-import arpes.config
+from arpes.settings import SETTINGS
 import colorcet as cc
 import xarray as xr
 from arpes.analysis.general import rebin
@@ -151,7 +152,8 @@ class BokehInteractiveTool(ABC):
             low, high = np.min(plot_data), np.max(plot_data)
             dynamic_range = high - low
             self.color_maps[plot_name].update(
-                low=low + new[0] / 100 * dynamic_range, high=low + new[1] / 100 * dynamic_range
+                low=low + new[0] / 100 * dynamic_range,
+                high=low + new[1] / 100 * dynamic_range,
             )
 
         return update_plot_colormap
@@ -164,8 +166,8 @@ class BokehInteractiveTool(ABC):
         """
         from bokeh.io import output_notebook
 
-        if "bokeh_configured" not in arpes.config.CONFIG:
-            arpes.config.CONFIG["bokeh_configured"] = True
+        if "bokeh_configured" not in SETTINGS:
+            SETTINGS["bokeh_configured"] = True
 
             # use a longer load_timeout for heavy tools
             output_notebook(hide_banner=True, load_timeout=10000)
@@ -181,7 +183,7 @@ class BokehInteractiveTool(ABC):
         Various settings, like the sizes of widgets and panels can be set in user
         settings overrides, and are read here.
         """
-        self.settings = arpes.config.SETTINGS.get("interactive", {}).copy()
+        self.settings = SETTINGS.get("interactive", {}).copy()
         for k, v in kwargs.items():
             if k not in self.settings:
                 self.settings[k] = v
@@ -233,7 +235,11 @@ class BokehInteractiveTool(ABC):
         pass
 
     def make_tool(
-        self, arr: Union[xr.DataArray, str], notebook_url=None, notebook_handle=True, **kwargs
+        self,
+        arr: Union[xr.DataArray, str],
+        notebook_url=None,
+        notebook_handle=True,
+        **kwargs
     ):
         """Starts the Bokeh application in accordance with the Bokeh app docs.
 
@@ -250,8 +256,8 @@ class BokehInteractiveTool(ABC):
             return "localhost:{}".format(port)
 
         if notebook_url is None:
-            if "PORT" in arpes.config.CONFIG:
-                notebook_url = "localhost:{}".format(arpes.config.CONFIG["PORT"])
+            if "PORT" in SETTINGS:
+                notebook_url = "localhost:{}".format(SETTINGS["PORT"])
             else:
                 notebook_url = "localhost:8888"
 
@@ -292,9 +298,15 @@ class SaveableTool(BokehInteractiveTool):
         self._last_save = None
 
     def make_tool(
-        self, arr: Union[xr.DataArray, str], notebook_url=None, notebook_handle=True, **kwargs
+        self,
+        arr: Union[xr.DataArray, str],
+        notebook_url=None,
+        notebook_handle=True,
+        **kwargs
     ):
-        super().make_tool(arr, notebook_url=notebook_url, notebook_handle=notebook_handle, **kwargs)
+        super().make_tool(
+            arr, notebook_url=notebook_url, notebook_handle=notebook_handle, **kwargs
+        )
         return self.app_context
 
     @property

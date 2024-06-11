@@ -1,5 +1,5 @@
 from arpes.io import load_example_data
-from arpes.plotting.dynamic_tool import make_dynamic
+from arpes.qt_tools.dynamic_tool import make_dynamic
 
 data = load_example_data()
 
@@ -13,7 +13,7 @@ def adjust_gamma(data, gamma: float = 1):
     :param gamma:
     :return:
     """
-    return data ** gamma
+    return data**gamma
 
 
 make_dynamic(adjust_gamma, data)

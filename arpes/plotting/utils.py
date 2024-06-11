@@ -24,7 +24,7 @@ from matplotlib.lines import Line2D
 
 import xarray as xr
 from arpes import VERSION
-from arpes import config
+from arpes.settings import SETTINGS
 from arpes.typing import DataType
 from arpes.utilities import normalize_to_spectrum
 from arpes.utilities.jupyter import get_recent_history, get_notebook_name
@@ -376,14 +376,14 @@ def sum_annotation(eV=None, phi=None):
         return "{:.2f}".format(bound)
 
     if eV is not None:
-        if config.SETTINGS["use_tex"]:
+        if SETTINGS.get("use_tex", False):
             eV_annotation = (
                 "$\\text{E}_{" + to_str(eV.start) + "}^{" + to_str(eV.stop) + "}$"
             )
         else:
             eV_annotation = to_str(eV.start) + " < E < " + to_str(eV.stop)
     if phi is not None:
-        if config.SETTINGS["use_tex"]:
+        if SETTINGS.get("use_tex", False):
             phi_annotation = (
                 "$\\phi_{" + to_str(phi.start) + "}^{" + to_str(phi.stop) + "}$"
             )
@@ -404,7 +404,7 @@ def mean_annotation(eV=None, phi=None):
         return "{:.2f}".format(bound)
 
     if eV is not None:
-        if config.SETTINGS["use_tex"]:
+        if SETTINGS.get("use_tex", False):
             eV_annotation = (
                 "$\\bar{\\text{E}}_{"
                 + to_str(eV.start)
@@ -417,7 +417,7 @@ def mean_annotation(eV=None, phi=None):
                 "Mean<" + to_str(eV.start) + " < E < " + to_str(eV.stop) + ">"
             )
     if phi is not None:
-        if config.SETTINGS["use_tex"]:
+        if SETTINGS.get("use_tex", False):
             phi_annotation = (
                 "$\\bar{\\phi}_{" + to_str(phi.start) + "}^{" + to_str(phi.stop) + "}$"
             )
@@ -849,7 +849,7 @@ def phase_angle_colorbar(high=np.pi * 2, low=0, ax=None, **kwargs):
         "ticks": ["0", r"$\pi$", r"$2\pi$"],
     }
 
-    if not config.SETTINGS["use_tex"]:
+    if not SETTINGS.get("use_tex", False):
         extra_kwargs["ticks"] = ["0", "π", "2π"]
 
     extra_kwargs.update(kwargs)
@@ -1197,7 +1197,7 @@ def path_for_holoviews(desired_path):
 
 def name_for_dim(dim_name, escaped=True):
     """Alternate variant of `label_for_dim`."""
-    if config.SETTINGS["use_tex"]:
+    if SETTINGS.get("use_tex", False):
         name = {
             "temperature": "Temperature",
             "beta": r"$\beta$",
@@ -1238,7 +1238,7 @@ def name_for_dim(dim_name, escaped=True):
 
 def unit_for_dim(dim_name, escaped=True):
     """Calculate LaTeX or fancy display label for the unit associated to a dimension."""
-    if config.SETTINGS["use_tex"]:
+    if SETTINGS.get("use_tex", False):
         unit = {
             "temperature": "K",
             "theta": r"rad",
@@ -1317,7 +1317,7 @@ def label_for_colorbar(data):
 
 def label_for_dim(data=None, dim_name=None, escaped=True):
     """Generates a fancy label (LaTeX, if available) for a dimension according to standard conventions."""
-    if config.SETTINGS.get("use_tex", False):
+    if SETTINGS.get("use_tex", False):
         raw_dim_names = {
             "temperature": "Temperature",
             "theta": r"$\theta$",
@@ -1418,7 +1418,7 @@ def fancy_labels(ax_or_ax_set, data=None):
 
 def label_for_symmetry_point(point_name: str) -> str:
     """Determines the LaTeX label for a symmetry point shortcode."""
-    if config.SETTINGS["use_tex"]:
+    if SETTINGS.get("use_tex", False):
         proper_names = {
             "G": r"$\Gamma$",
             "X": r"X",

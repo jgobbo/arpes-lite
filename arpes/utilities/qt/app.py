@@ -14,7 +14,7 @@ from arpes.utilities.ui import CursorRegion
 from .data_array_image_view import DataArrayImageView, DataArrayPlot
 from .utils import PlotOrientation, ReactivePlotRecord
 
-from arpes.config import SETTINGS
+from arpes.settings import SETTINGS
 
 if TYPE_CHECKING:
     from .windows import SimpleWindow

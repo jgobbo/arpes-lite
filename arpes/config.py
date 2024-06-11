@@ -28,5 +28,3 @@ exports_root = data_root / "exports"
 results_root = root / "results" / sample_name
 
 plt.rcParams["image.cmap"] = "magma"
-
-SETTINGS = {"use_tex": False, "DEBUG": True}
