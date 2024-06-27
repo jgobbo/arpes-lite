@@ -4,8 +4,14 @@
 import pyqtgraph as pg
 import numpy as np
 from scipy import interpolate
+from weakref import ReferenceType
 
 from .utils import PlotOrientation
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .app import SimpleApp
 
 __all__ = (
     "DataArrayImageView",
@@ -36,17 +42,23 @@ class CoordAxis(pg.AxisItem):
 class DataArrayPlot(pg.PlotWidget):
     """A plot for 1D xr.DataArray instances with a coordinate aware axis."""
 
-    def __init__(self, root, orientation, *args, **kwargs):
+    def __init__(self, root: ReferenceType, orientation, *args, **kwargs):
         """
         Use custom axes so that we can provide coordinate-ful rather than pixel based
         values.
         """
+        self._root = root
         self.orientation = orientation
 
         axis_or = "bottom" if orientation == PlotOrientation.Horizontal else "left"
         self._coord_axis = CoordAxis(dim_index=0, orientation=axis_or)
 
         super().__init__(axisItems=dict([[axis_or, self._coord_axis]]), *args, **kwargs)
+
+    @property
+    def root(self) -> "SimpleApp":
+        """Unpacks the weak reference to the root object."""
+        return self._root()
 
     def plot(self, data, *args, **kwargs):
         """Updates the UI with new data.
@@ -82,11 +94,12 @@ class DataArrayImageView(pg.ImageView):
     around realistic scientific datasets.
     """
 
-    def __init__(self, root, *args, **kwargs):
+    def __init__(self, root: ReferenceType, *args, **kwargs):
         """
         Use custom axes so that we can provide coordinate-ful rather than pixel based
         values.
         """
+        self._root = root
         self._coord_axes = {
             "left": CoordAxis(dim_index=1, orientation="left"),
             "bottom": CoordAxis(dim_index=0, orientation="bottom"),
@@ -96,6 +109,11 @@ class DataArrayImageView(pg.ImageView):
         super().__init__(view=plot_item, *args, **kwargs)
 
         self.view.invertY(False)
+
+    @property
+    def root(self) -> "SimpleApp":
+        """Unpacks the weak reference to the root object."""
+        return self._root()
 
     def setImage(self, img, keep_levels=False, *args, **kwargs):
         """Accepts an xarray.DataArray instead of a numpy array."""

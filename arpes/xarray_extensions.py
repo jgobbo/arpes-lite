@@ -2593,7 +2593,7 @@ class ARPESDatasetFitToolAccessor:
         return self._obj.results.G.map(lambda x: x.eval(*args, **kwargs))
 
     def show(self, detached=False):
-        from arpes.plotting.fit_tool import fit_tool
+        from arpes.qt_tools.fit_tool import fit_tool
 
         fit_tool(self._obj, detached=detached)
 
@@ -2740,7 +2740,7 @@ class ARPESFitToolsAccessor:
 
     def show(self, detached: bool = False):
         """Opens a Bokeh based interactive fit inspection tool."""
-        from arpes.plotting.fit_tool import fit_tool
+        from arpes.qt_tools.fit_tool import fit_tool
 
         fit_tool(self._obj, detached=detached)
 

@@ -26,7 +26,6 @@ from arpes.utilities.conversion.grids import (
 )
 from .fast_interp import Interpolator
 
-from arpes.trace import traceable
 import collections
 import warnings
 
@@ -34,9 +33,7 @@ import numpy as np
 import scipy.interpolate
 
 import xarray as xr
-from arpes.provenance import provenance, update_provenance
-from arpes.utilities import normalize_to_spectrum
-from typing import Callable, Optional, Union
+from typing import Optional
 
 from .kx_ky_conversion import ConvertKxKy, ConvertKp
 from .kz_conversion import ConvertKpKz
@@ -44,13 +41,11 @@ from .kz_conversion import ConvertKpKz
 __all__ = ["convert_to_kspace", "slice_along_path"]
 
 
-@traceable
 def grid_interpolator_from_dataarray(
     arr: xr.DataArray,
     fill_value=0.0,
     method="linear",
     bounds_error=False,
-    trace: Callable = None,
 ):
     """Translates an xarray.DataArray contents into a scipy.interpolate.RegularGridInterpolator.
 
@@ -63,7 +58,6 @@ def grid_interpolator_from_dataarray(
             flip_axes.add(d)
 
     values = arr.values
-    trace("Flipping axes")
     for dim in flip_axes:
         values = np.flip(values, arr.dims.index(dim))
 
@@ -71,13 +65,10 @@ def grid_interpolator_from_dataarray(
         arr.coords[d].values[::-1] if d in flip_axes else arr.coords[d].values
         for d in arr.dims
     ]
-    trace_size = [len(pts) for pts in interp_points]
 
     if method == "linear":
-        trace(f"Using fast_interp.Interpolator: size {trace_size}")
         return Interpolator.from_arrays(interp_points, values)
 
-    trace(f"Calling scipy.interpolate.RegularGridInterpolator: size {trace_size}")
     return scipy.interpolate.RegularGridInterpolator(
         points=interp_points,
         values=values,
@@ -320,22 +311,10 @@ def slice_along_path(
 
     if "id" in converted_ds.attrs:
         del converted_ds.attrs["id"]
-        provenance(
-            converted_ds,
-            arr,
-            {
-                "what": "Slice along path",
-                "by": "slice_along_path",
-                "parsed_interpolation_points": parsed_interpolation_points,
-                "interpolation_points": interpolation_points,
-            },
-        )
 
     return converted_ds
 
 
-@update_provenance("Automatically k-space converted")
-@traceable
 def convert_to_kspace(
     dataset: xr.Dataset,
     bounds=None,
@@ -343,7 +322,6 @@ def convert_to_kspace(
     calibration=None,
     coords=None,
     allow_chunks: bool = False,
-    trace: Callable = None,
     **kwargs,
 ) -> xr.Dataset:
     """Converts volumetric the data to momentum space ("backwards"). Typically what you want.
@@ -389,8 +367,6 @@ def convert_to_kspace(
         calibration ([type], optional): [description]. Defaults to None.
         coords ([type], optional): [description]. Defaults to None.
         allow_chunks (bool, optional): [description]. Defaults to False.
-        trace (Callable, optional): Controls whether to use execution tracing. Defaults to None.
-          Pass `True` to enable.
 
     Raises:
         NotImplementedError: [description]
@@ -404,7 +380,6 @@ def convert_to_kspace(
         coords = {}
     coords.update(kwargs)
 
-    trace("Normalizing to spectrum")
     spectrum: xr.DataArray = dataset.S.spectrum
 
     has_eV = "eV" in dataset.dims
@@ -417,8 +392,6 @@ def convert_to_kspace(
             warnings.warn("Input array is very large. Please consider resampling.")
 
         chunk_thickness = max(len(dataset.eV) // n_chunks, 1)
-
-        trace(f"Chunking along energy: {n_chunks}, thickness {chunk_thickness}")
 
         finished = []
         low_idx = 0
@@ -437,7 +410,6 @@ def convert_to_kspace(
                 calibration=calibration,
                 coords=coords,
                 allow_chunks=False,
-                trace=trace,
                 **kwargs,
             )
 
@@ -454,7 +426,6 @@ def convert_to_kspace(
     # Chunking is finished here
 
     # TODO be smarter about the resolution inference
-    trace("Determining dimensions and resolution")
     removed = [d for d in spectrum.dims if is_dimension_unconvertible(d)]
     old_dims = [d for d in spectrum.dims if not is_dimension_unconvertible(d)]
 
@@ -464,7 +435,6 @@ def convert_to_kspace(
 
     old_dims.sort()
 
-    trace("Replacing dummy coordinates with index-like ones.")
     # temporarily reassign coordinates for dimensions we will not
     # convert to "index-like" dimensions
     restore_index_like_coordinates = {r: dataset.coords[r].values for r in removed}
@@ -490,11 +460,10 @@ def convert_to_kspace(
         # ('chi', 'phi',): ConvertKxKy,
         ("hv", "phi"): ConvertKpKz,
     }.get(tuple(old_dims))
-    converter: Union[ConvertKp, ConvertKxKy, ConvertKpKz] = convert_cls(
+    converter: ConvertKp | ConvertKxKy | ConvertKpKz = convert_cls(
         dataset, converted_dims, calibration=calibration
     )
 
-    trace("Converting coordinates")
     converted_coordinates = converter.get_coordinates(
         resolution=resolution, bounds=bounds
     )
@@ -505,7 +474,6 @@ def convert_to_kspace(
 
     converted_coordinates.update(coords)
 
-    trace("Calling convert_coordinates")
     result = convert_coordinates(
         dataset,
         converted_coordinates,
@@ -515,41 +483,29 @@ def convert_to_kspace(
                 zip(dataset.dims, [converter.conversion_for(d) for d in dataset.dims])
             ),
         },
-        trace=trace,
     )
-    trace("Reassigning index-like coordinates.")
     result = result.assign_coords(**restore_index_like_coordinates)
-    trace("Finished.")
     return result
 
 
-@traceable
 def convert_coordinates(
     ds: xr.Dataset,
     target_coordinates: dict,
     coordinate_transform: dict,
-    trace: Callable = None,
 ) -> xr.Dataset:
     ds = ds.copy(deep=True)
     ordered_source_dimensions = ds.dims
-    trace("Instantiating grid interpolator.")
     grid_interpolator = grid_interpolator_from_dataarray(
         ds.S.spectrum.transpose(*ordered_source_dimensions),
         fill_value=float("nan"),
-        trace=trace,
     )
-    trace("Finished instantiating grid interpolator.")
 
     # Skip the Jacobian correction for now
     # Convert the raw coordinate axes to a set of gridded points
-    trace(
-        f"Calling meshgrid: {[len(target_coordinates[d]) for d in coordinate_transform['dims']]}"
-    )
     meshed_coordinates = np.meshgrid(
         *[target_coordinates[dim] for dim in coordinate_transform["dims"]],
         indexing="ij",
     )
-    trace("Raveling coordinates")
     meshed_coordinates = [meshed_coord.ravel() for meshed_coord in meshed_coordinates]
 
     if "eV" not in ds.dims:
@@ -561,22 +517,18 @@ def convert_coordinates(
     ordered_transformations = [
         coordinate_transform["transforms"][dim] for dim in ds.dims
     ]
-    trace("Calling grid interpolator")
 
-    trace("Pulling back coordinates")
     transformed_coordinates = []
     for tr in ordered_transformations:
-        trace(f"Running transform {tr}")
         transformed_coordinates.append(tr(*meshed_coordinates))
 
     if not isinstance(grid_interpolator, Interpolator):
         transformed_coordinates = np.array(transformed_coordinates).T
 
-    trace("Calling grid interpolator")
     converted_volume = grid_interpolator(transformed_coordinates)
 
     # Wrap it all up
-    def acceptable_coordinate(c: Union[np.ndarray, xr.DataArray]) -> bool:
+    def acceptable_coordinate(c: np.ndarray | xr.DataArray) -> bool:
         # Currently we do this to filter out coordinates that are functions of the old angular dimensions,
         # we could forward convert these, but right now we do not
         try:
@@ -587,7 +539,6 @@ def convert_coordinates(
         except:
             return True
 
-    trace("Bundling into DataArray")
     target_coordinates = {
         k: v for k, v in target_coordinates.items() if acceptable_coordinate(v)
     }
@@ -604,5 +555,4 @@ def convert_coordinates(
     ds = ds.drop_vars(spectrum_name)
     ds = ds.assign({spectrum_name: spectrum})
 
-    trace("Finished")
     return ds

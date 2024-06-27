@@ -5,5 +5,8 @@ Listed below are major changes which deprecate a significant amount of the codeb
 2. Attributes have been removed from data_vars, so they only exist in the full DataSet. 
     My philosophy here is that functions should always be provided the full DataSet (from which a spectrum can be extracted), so the 
     attrs only need to exist in one place.
+3. Configuration has been mostly gutted. Now it simply imports commonly used packages, adds common endstations, and establishes path roots for easier reference to data and figures.
+4. Trace and provenance are slowly being removed. Trace seems only to make debugging harder. I don't personally find value in provenance/logging over expecting users to follow decent coding practices.
 
-read notes for more details on the purpose of changes
+
+Check the notes in this folder for details on the purpose of changes.

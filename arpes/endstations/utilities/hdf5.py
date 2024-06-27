@@ -87,10 +87,14 @@ def construct_coords(
             all_coords_for_data = []
             for dim in range(n_dims):
                 coord_name = coord_names[dim]
+                delta = (
+                    round(deltas[dim]) if coord_names[dim] == "pixel" else deltas[dim]
+                )
                 coord_values = np.linspace(
                     offsets[dim],
-                    offsets[dim] + deltas[dim] * coord_lengths[dim],
+                    offsets[dim] + delta * coord_lengths[dim],
                     coord_lengths[dim],
+                    endpoint=False,
                 )
 
                 if coord_name in constructed_coords:

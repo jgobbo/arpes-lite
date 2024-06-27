@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from weakref import ReferenceType
-    from arpes.qt_tools.image_tool import ImageTool
+    from .base import ImageTool
 
 __all__ = ("BinningInfoWidget",)
 

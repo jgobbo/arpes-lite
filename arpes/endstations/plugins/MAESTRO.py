@@ -30,7 +30,7 @@ class MAESTROARPESEndstationBase(
     ALIASES = None  # skip me
     ANALYZER_INFORMATION = None
 
-    # @override py3.12
+    @override
     def postprocess_scan(self, data: xr.Dataset, scan_desc: dict = None):
         data.attrs.update(self.ANALYZER_INFORMATION)
 
@@ -128,19 +128,20 @@ class MAESTROMicroARPESEndstation(MAESTROARPESEndstationBase):
         data = super().postprocess_scan(data, scan_desc)
 
         conversion_factor = {
-            "Angular30": 0.181,
-            "Angular14": 0.0963,
-            "Angular7NF": 0.04264,
-        }.get(data.attrs["SSlnm0"], 200)
+            "Angular30": 0.181 / 4,
+            "Angular14": 0.0963 / 4,
+            "Angular7NF": 0.04264 / 4,
+        }.get(data.attrs["SSlnm0"], 180 / np.pi)
 
         if "phi" in data.coords:
-            data.coords["phi"] = (conversion_factor / 200) * (
-                data.coords["phi"] - data.coords["phi"].mean()
+            data.coords["phi"] = (
+                (data.coords["phi"] - data.coords["phi"].mean())
+                * conversion_factor
+                * (np.pi / 180)
             )
 
         data_vars = list(data.data_vars.keys())
         spectra_names = [data_var for data_var in data_vars if "Spectra" in data_var]
-
         max_dims = 0
         for spectrum_name in spectra_names:
             if n_dims := len(data[spectrum_name].dims) > max_dims:

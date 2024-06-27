@@ -40,9 +40,9 @@ def run_tool_in_daemon_process(tool_handler: Callable) -> Callable:
     """
 
     @functools.wraps(tool_handler)
-    def wrapped_handler(data, detached: bool = False, **kwargs):
+    def wrapped_handler(*args, detached: bool = False, **kwargs):
         if not detached:
-            return tool_handler(data, **kwargs)
+            return tool_handler(*args, **kwargs)
 
         if isinstance(data, xr_types):
             # this should be a noop but seems to fix a bug which

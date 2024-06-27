@@ -1,20 +1,21 @@
 """Application infrastructure for apps/tools which browse a data volume."""
 
-from PyQt5 import QtWidgets
-import pyqtgraph as pg
+import sys
 from math import floor
+from typing import Any, TYPE_CHECKING
+import weakref
 import numpy as np
 import xarray as xr
-import weakref
-from typing import Any, TYPE_CHECKING
-
+import pyqtgraph as pg
+from PyQt5.QtWidgets import QApplication, QWidget
 from collections import defaultdict
 
 from arpes.utilities.ui import CursorRegion
+from arpes.typing import DataType
+from arpes.settings import SETTINGS
 from .data_array_image_view import DataArrayImageView, DataArrayPlot
 from .utils import PlotOrientation, ReactivePlotRecord
 
-from arpes.settings import SETTINGS
 
 if TYPE_CHECKING:
     from .windows import SimpleWindow
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
 __all__ = ["SimpleApp"]
 
 
-class SimpleApp:
+class SimpleApp(QApplication):
     """
     Has all of the layout information and business logic for an interactive data
     browsing utility using PyQt5.
@@ -37,6 +38,7 @@ class SimpleApp:
 
     def __init__(self):
         """Only interesting thing on init is to make a copy of the user settings."""
+        super().__init__(sys.argv)
         self._ninety_eight_percentile = None
         self.settings = None
         self._window = None
@@ -65,7 +67,7 @@ class SimpleApp:
             print(pprint.pformat(value))
 
     @property
-    def data(self) -> xr.Dataset:
+    def data(self) -> DataType:
         """
         Read data from the cached attribute.
 
@@ -76,9 +78,11 @@ class SimpleApp:
         return self._data
 
     @data.setter
-    def data(self, new_data: xr.Dataset):
+    def data(self, new_data: DataType):
         self._data = new_data
-        self.spectrum = new_data.S.spectrum if new_data is not None else None
+        self.spectrum = (
+            new_data.S.spectrum if isinstance(new_data, xr.Dataset) else new_data
+        )
 
     def close(self):
         """
@@ -147,8 +151,7 @@ class SimpleApp:
         `dimensions`. This is used to generate the many different views of a volume in
         the browsable tools.
         """
-        if layout is None:
-            layout = self._layout
+        layout = self._layout if layout is None else layout
 
         remaining_dims = [dim for dim in self.spectrum.dims if dim not in dimensions]
 
@@ -280,6 +283,7 @@ class SimpleApp:
         changed_dimensions: set[str] = None,
         force=False,
         keep_levels=True,
+        reactive_views=None,
     ):
         """
         Updates all reactive views based on the specified slices.
@@ -311,38 +315,35 @@ class SimpleApp:
             dim: safe_slice(unsafe_slice, dim)
             for dim, unsafe_slice in coord_slices.items()
         }
-        for reactive in self.reactive_views:
-            if set(reactive.dims).intersection(changed_dimensions) or force:
-                reactive_slices = {dim: safe_slices[dim] for dim in reactive.dims}
+        reactive_views = (
+            self.reactive_views if reactive_views is None else reactive_views
+        )
+        for plot_record in reactive_views:
+            if set(plot_record.dims).intersection(changed_dimensions) or force:
+                reactive_slices = {dim: safe_slices[dim] for dim in plot_record.dims}
+                view = plot_record.view
 
-                if isinstance(reactive.view, DataArrayImageView):
-                    image_data = self.spectrum.isel(**reactive_slices)
+                if isinstance(view, DataArrayImageView):
+                    image_data = view.root.spectrum.isel(**reactive_slices)
                     if reactive_slices:
                         image_data = image_data.mean(list(reactive_slices.keys()))
-                    reactive.view.setImage(image_data, keep_levels=keep_levels)
+                    view.setImage(image_data, keep_levels=keep_levels)
 
-                elif isinstance(reactive.view, pg.PlotWidget):
-                    for_plot = self.spectrum.isel(**reactive_slices)
+                elif isinstance(view, DataArrayPlot):
+                    plot_data = view.root.spectrum.isel(**reactive_slices)
                     if reactive_slices:
-                        for_plot = for_plot.mean(list(reactive_slices.keys()))
+                        plot_data = plot_data.mean(list(reactive_slices.keys()))
 
                     cursors = [
                         plot_item
-                        for plot_item in reactive.view.getPlotItem().items
+                        for plot_item in view.getPlotItem().items
                         if isinstance(plot_item, CursorRegion)
                     ]
-                    reactive.view.clear()
+                    view.clear()
                     for cursor in cursors:
-                        reactive.view.addItem(cursor)
+                        view.addItem(cursor)
 
-                    if isinstance(reactive.view, DataArrayPlot):
-                        reactive.view.plot(for_plot)
-                        continue
-
-                    if reactive.orientation == PlotOrientation.Horizontal:
-                        reactive.view.plot(for_plot.values)
-                    else:
-                        reactive.view.plot(for_plot.values, range(len(for_plot.values)))
+                    view.plot(plot_data)
 
     def before_show(self):
         """Lifecycle hook."""
@@ -353,9 +354,9 @@ class SimpleApp:
         pass
 
     def layout(self):
-        """Hook for defining the application layout.
-
-        This needs to be provided by subclasses.
+        """
+        Hook for defining the application layout. This needs to be provided by
+        subclasses.
         """
         raise NotImplementedError
 
@@ -364,36 +365,27 @@ class SimpleApp:
         """Gets the window instance on the current application."""
         return self._window
 
-    def start(self, no_exec: bool = False, app: QtWidgets.QApplication = None):
+    def start(self):
         """Starts the Qt application, configures the window, and begins Qt execution."""
-
-        if app is None:
-            app = QtWidgets.QApplication([])
-
-        app.owner = self
 
         from arpes.utilities.qt import qt_info
 
-        qt_info.init_from_app(app)
+        qt_info.init_from_app(self)
 
         self._window = self.WINDOW_CLS()
         self.window.resize(*qt_info.inches_to_px(self.WINDOW_SIZE))
         self.window.setWindowTitle(self.TITLE)
 
-        self.cw = QtWidgets.QWidget()
+        self.central_widget = QWidget()
         self._layout = self.layout()
-        self.cw.setLayout(self._layout)
-        self.window.setCentralWidget(self.cw)
+        self.central_widget.setLayout(self._layout)
+        self.window.setCentralWidget(self.central_widget)
         self.window.app = weakref.ref(self)
 
         self.before_show()
-
         self.window.show()
-
         self.after_show()
-        qt_info.apply_settings_to_app(app)
 
-        if no_exec:
-            return
+        qt_info.apply_settings_to_app(self)
 
-        QtWidgets.QApplication.instance().exec()
+        self.exec()

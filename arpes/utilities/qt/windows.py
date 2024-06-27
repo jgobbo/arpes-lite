@@ -109,16 +109,3 @@ class SimpleWindow(QtWidgets.QMainWindow):
     def window_print(self, *args, **kwargs):
         """Forwards prints to the application instance so they end up in Jupyter."""
         print(*args, **kwargs)
-
-
-class SimpleApp:
-    """An application which corresponds to a SimpleWindow instance.
-
-    Manages the business logic for an interactive application.
-    """
-
-    def __init__(self):
-        self.settings = None
-        self.context = {}
-
-        self.settings = SETTINGS.copy()
