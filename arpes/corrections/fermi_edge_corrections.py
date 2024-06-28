@@ -1,5 +1,6 @@
 """Automated utilities for calculating Fermi edge corrections."""
 
+from typing import Optional
 import lmfit as lf
 import matplotlib.pyplot as plt
 import numpy as np
@@ -252,7 +253,7 @@ def apply_photon_energy_fermi_edge_correction(
 
 
 def apply_quadratic_fermi_edge_correction(
-    arr: xr.DataArray, correction: lf.model.ModelResult = None, offset=None
+    arr: xr.DataArray, correction: Optional[lf.model.ModelResult] = None, offset=None
 ):
     """Applies a Fermi edge correction using a quadratic fit for the edge."""
     assert isinstance(arr, xr.DataArray)
@@ -310,32 +311,12 @@ def fit_fermi_edge(cut: xr.DataArray) -> xr.DataArray:
     return quad_fit.eval(x=edge_region["phi"])
 
 
-def shift_eV_origin_to_fermi_edge(ds: xr.Dataset, **kwargs) -> xr.Dataset:
-    """
-    Shifts the eV axis of a dataset so that the Fermi edge is at 0.
-    Args:
-        ds: The dataset to shift
-    Kwargs:
-        smoothing_sigma: The sigma value for the Gaussian filter used to smooth the
-            integrated edc. Increasing this can fix faulty edge detection in noisy data.
-    Returns:
-        The dataset with the Fermi edge at 0.
-    """
-    ds = ds.copy(deep=True)
-    spectrum: xr.DataArray = ds.S.spectrum if isinstance(ds, xr.Dataset) else ds
-
-    integrated_edc = gaussian_filter1d(
-        spectrum.sum([dim for dim in spectrum.dims if dim != "eV"]),
-        kwargs.get("smoothing_sigma", 1),
-    )
-    dropoff_index = np.argmin(np.diff(integrated_edc))
-    ds.coords["eV"] = ds.coords["eV"] - ds.coords["eV"].values[dropoff_index]
-    return ds
-
-
 def fix_fermi_edge(
-    ds: DataType, broadcast_fit: bool = True, edge_fit: xr.DataArray = None, **kwargs
-) -> xr.Dataset:
+    dataset: DataType,
+    broadcast_fit: bool = True,
+    edge_fit: Optional[xr.DataArray] = None,
+    **kwargs,
+) -> DataType:
     """
     Automatically corrects the Fermi edge in a dataset. If the measurement was done with
     a curved slit, the Fermi edge will only be shifted to 0. If the measurement was done
@@ -351,34 +332,39 @@ def fix_fermi_edge(
 
     Kwargs:
         smoothing_sigma: The sigma value for the Gaussian filter used to smooth the
-            integrated edc for fermi_edge evaluation. Increasing this can fix fault edge
-            detection in noisy data.
+            integrated edc for fermi_edge detection. Increasing this can fix faulty
+            edge detection in noisy data.
 
     Returns:
         A new dataset with the Fermi edge corrected.
     """
-
-    curved_edge = "slit_shape" in ds.attrs and ds.attrs["slit_shape"] == "straight"
-    shifted_ds = (
-        shift_eV_origin_to_fermi_edge(ds, **kwargs)
-        if edge_fit is None
-        else ds.copy(deep=True)
+    HEMISPHERE_DIMS = {"eV", "phi"}
+    original_spectrum: xr.DataArray = (
+        dataset.S.spectrum if isinstance(dataset, xr.Dataset) else dataset
     )
-    if not curved_edge and edge_fit is None:
-        return shifted_ds
+    # We want to be able to pass any dataset for convenience, but we only want to
+    # correct the Fermi edge for hemisphere data.
+    if not all(dim in original_spectrum.dims for dim in HEMISPHERE_DIMS):
+        return dataset
+
+    dataset = dataset.copy(deep=True)
+    if edge_fit is None:
+        integrated_edc = gaussian_filter1d(
+            original_spectrum.sum(
+                [dim for dim in original_spectrum.dims if dim != "eV"]
+            ),
+            kwargs.get("smoothing_sigma", 1),
+        )
+        dropoff_index = np.argmin(np.diff(integrated_edc))
+        dataset.coords["eV"] = (
+            dataset.coords["eV"] - dataset.coords["eV"].values[dropoff_index]
+        )
+        if dataset.attrs.get("slit_shape") != "straight":
+            return dataset
 
     spectrum: xr.DataArray = (
-        shifted_ds.S.spectrum if isinstance(shifted_ds, xr.Dataset) else shifted_ds
+        dataset.S.spectrum if isinstance(dataset, xr.Dataset) else dataset
     )
-    HEMISPHERE_DIMS = {"eV", "phi"}
-    if not all(dim in spectrum.dims for dim in HEMISPHERE_DIMS):
-        print(
-            f"""Not all required dimensions are present in the dataset. Attributes in
-            the dataset indicate that the fermi edge should be curved, but the spectrum
-            does not contain the expected dimensions {HEMISPHERE_DIMS}. Skipping curved
-            edge correction and returning shifted dataset."""
-        )
-        return shifted_ds
 
     scan_axes = [dim for dim in spectrum.dims if dim not in HEMISPHERE_DIMS]
     stacked = spectrum.stack(flattened=scan_axes)
@@ -395,6 +381,9 @@ def fix_fermi_edge(
         fix_one_fermi_edge(cut, edge_fit) for cut in stacked.transpose("flattened", ...)
     ]
     fixed_stack: xr.DataArray = xr.concat(fixed_cuts, dim="flattened")
+    # Have to replace only the values to unstack later
     stacked.values = fixed_stack.transpose(*stacked.dims)
 
-    return shifted_ds.update({shifted_ds.S.spectrum_name: stacked.unstack("flattened")})
+    if isinstance(dataset, xr.Dataset):
+        return dataset.update({dataset.S.spectrum_name: stacked.unstack("flattened")})
+    return stacked.unstack("flattened")

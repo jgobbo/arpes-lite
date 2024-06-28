@@ -12,11 +12,9 @@ of data.
 """
 
 import warnings
-
-from typing import List, Union, Optional
 from dataclasses import dataclass
-
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 import xarray as xr
@@ -26,6 +24,8 @@ from arpes.typing import DataType
 
 __all__ = (
     "load_data",
+    "load_folder",
+    "export_dataset",
     "load_example_data",
     "list_pickles",
     "stitch",
@@ -33,7 +33,7 @@ __all__ = (
 
 
 def load_data(
-    file: Union[str, Path, int], location: Optional[Union[str, type]] = None, **kwargs
+    file: str | Path | int, location: Optional[str | type] = None, **kwargs
 ) -> xr.Dataset:
     """Loads a piece of data using available plugins. This the user facing API for data loading.
 
@@ -74,6 +74,25 @@ def load_data(
         )
 
     return load_scan(desc, **kwargs)
+
+
+def load_folder(
+    folder: Path, location: str | type = None, pattern: str = "*", **kwargs
+) -> list[xr.Dataset]:
+    """
+    Loads all files in a folder using the endstation plugin specified by location.
+
+    Args:
+        folder: The folder to load all data from
+        location: The endstation plugin to use for loading the data
+        pattern: The pattern to use for globbing the files in the folder. Defaults to
+            all files
+    """
+
+    all_datasets = []
+    for file in folder.glob(pattern):
+        all_datasets.append(load_data(file, location=location, **kwargs))
+    return all_datasets
 
 
 DATA_EXAMPLES = {
@@ -124,9 +143,9 @@ example_data = ExampleData()
 
 
 def stitch(
-    df_or_list: Union[List[str], pd.DataFrame],
+    df_or_list: list[str] | pd.DataFrame,
     attr_or_axis: str,
-    built_axis_name: Optional[str] = None,
+    built_axis_name: str = None,
     sort: bool = True,
 ) -> DataType:
     """Stitches together a sequence of scans or a DataFrame.
@@ -152,8 +171,7 @@ def stitch(
 
         list_of_files = list(df_or_list)
 
-    if built_axis_name is None:
-        built_axis_name = attr_or_axis
+    built_axis_name = attr_or_axis if built_axis_name is None else built_axis_name
 
     if not list_of_files:
         raise ValueError("Must supply at least one file to stitch")
@@ -196,7 +214,7 @@ def stitch(
     return concatenated
 
 
-def export_dataset(dataset: xr.Dataset, path: Union[str, Path]):
+def export_dataset(dataset: xr.Dataset, path: str | Path):
     """
     Corrects bad keys/values and then exports dataset to netcdf.
     Note that all values that are not strings, ints, or floats are converted to strings.

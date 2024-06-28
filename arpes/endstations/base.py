@@ -1,6 +1,5 @@
 """Plugin facility to read and normalize information from different sources to a common format."""
 
-from arpes.trace import Trace, traceable
 import warnings
 import re
 
@@ -100,11 +99,6 @@ class EndstationBase:
     SUMMABLE_NULL_DIMS = ["phi", "cycle"]
 
     RENAME_KEYS = {}
-
-    trace: Trace
-
-    def __init__(self) -> None:
-        self.trace = Trace(silent=True)
 
     @classmethod
     def is_file_accepted(cls, file, scan_desc) -> bool:
@@ -340,12 +334,10 @@ class EndstationBase:
         but for the most part loaders just specializing one or more of these different steps
         as appropriate for a beamline.
         """
-        self.trace("Resolving frame locations")
         resolved_frame_locations = self.resolve_frame_locations(scan_desc)
         resolved_frame_locations = [
             f if isinstance(f, str) else str(f) for f in resolved_frame_locations
         ]
-        self.trace(f"Found frames: {resolved_frame_locations}")
         frames = [
             self.load_single_frame(fpath, scan_desc, **kwargs)
             for fpath in resolved_frame_locations
@@ -546,10 +538,7 @@ def resolve_endstation(retry=True, **kwargs) -> EndstationBase:
         )
 
 
-@traceable
-def load_scan(
-    scan_desc: Dict[str, str], retry=True, trace=None, **kwargs: Any
-) -> xr.Dataset:
+def load_scan(scan_desc: Dict[str, str], retry=True, **kwargs: Any) -> xr.Dataset:
     """Resolves a plugin and delegates loading a scan.
 
     This is used interally by `load_data` and should not be invoked directly
@@ -562,7 +551,6 @@ def load_scan(
     Args:
         scan_desc: Information identifying the scan, typically a scan number or full path.
         retry: Used to attempt a reload of plugins and subsequent data load attempt.
-        trace: Trace instance for debugging, pass True or False (default) to control this parameter
         kwargs:
 
     Returns:
@@ -573,7 +561,6 @@ def load_scan(
     full_note.update(note)
 
     endstation_cls = resolve_endstation(retry=retry, **full_note)
-    trace(f"Using plugin class {endstation_cls}")
 
     key = "file" if "file" in scan_desc else "path"
 
@@ -586,7 +573,5 @@ def load_scan(
     except ValueError:
         pass
 
-    trace(f"Loading {scan_desc}")
     endstation: EndstationBase = endstation_cls()
-    endstation.trace = trace
-    return endstation.load(scan_desc, trace=trace, **kwargs)
+    return endstation.load(scan_desc, **kwargs)
