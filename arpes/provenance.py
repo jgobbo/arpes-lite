@@ -25,7 +25,7 @@ import os.path
 import uuid
 import warnings
 
-from typing import Any, Callable, Union, List, Optional
+from typing import Any, Callable, Optional
 
 import xarray as xr
 
@@ -72,7 +72,7 @@ def provenance_from_file(child_arr: DataType, file: Any, record: str):
 
 
 def update_provenance(
-    what: str, record_args: Optional[List[str]] = None, keep_parent_ref: bool = False
+    what: str, record_args: Optional[list[str]] = None, keep_parent_ref: bool = False
 ):
     """A decorator that promotes a function to one that records data provenance.
 
@@ -89,9 +89,13 @@ def update_provenance(
         @functools.wraps(fn)
         def func_wrapper(*args: Any, **kwargs: Any) -> xr.DataArray:
 
-            arg_parents = [v for v in args if isinstance(v, xr_types) and "id" in v.attrs]
+            arg_parents = [
+                v for v in args if isinstance(v, xr_types) and "id" in v.attrs
+            ]
             kwarg_parents = {
-                k: v for k, v in kwargs.items() if isinstance(v, xr_types) and "id" in v.attrs
+                k: v
+                for k, v in kwargs.items()
+                if isinstance(v, xr_types) and "id" in v.attrs
             }
             all_parents = arg_parents + list(kwarg_parents.values())
             result = fn(*args, **kwargs)
@@ -149,32 +153,17 @@ def save_plot_provenance(plot_fn: Callable) -> Callable:
 
     @functools.wraps(plot_fn)
     def func_wrapper(*args, **kwargs):
-        import arpes.config
-
         path = plot_fn(*args, **kwargs)
         if isinstance(path, str) and os.path.exists(path):
-            workspace = arpes.config.CONFIG["WORKSPACE"]
-
-            try:
-                workspace = workspace["name"]
-            except (TypeError, KeyError):
-                pass
-
-            if not workspace or workspace not in path:
-                warnings.warn(
-                    (
-                        "Plotting function {} appears not to abide by "
-                        "practice of placing plots into designated workspaces."
-                    ).format(plot_fn.__name__)
-                )
-
             provenance_context = {
                 "VERSION": VERSION,
                 "time": datetime.datetime.now().isoformat(),
                 "jupyter_context": get_recent_history(5),
                 "name": plot_fn.__name__,
                 "args": [
-                    arg.attrs.get("provenance", {}) for arg in args if isinstance(arg, xr.DataArray)
+                    arg.attrs.get("provenance", {})
+                    for arg in args
+                    if isinstance(arg, xr.DataArray)
                 ],
                 "kwargs": {
                     k: v.attrs.get("provenance", {})
@@ -194,7 +183,7 @@ def save_plot_provenance(plot_fn: Callable) -> Callable:
 
 def provenance(
     child_arr: DataType,
-    parent_arr: Union[DataType, List[DataType]],
+    parent_arr: DataType | list[DataType],
     record,
     keep_parent_ref: bool = False,
 ):

@@ -24,14 +24,7 @@ class FallbackEndstation(EndstationBase):
     ALIASES = []
 
     ATTEMPT_ORDER = [
-        "ANTARES",
-        "MBS",
         "ALS-BL7",
-        "ALS-BL403",
-        "Igor",
-        "Kaindl",
-        "ALG-Main",
-        "ALG-SToF",
     ]
 
     @classmethod
@@ -41,9 +34,6 @@ class FallbackEndstation(EndstationBase):
         This is done by looping through loaders in a predetermined priority order,
         and asking each whether it is capable of loading the file.
         """
-        import arpes.config  # pylint: disable=redefined-outer-name
-
-        arpes.config.load_plugins()
 
         for location in cls.ATTEMPT_ORDER:
             try:

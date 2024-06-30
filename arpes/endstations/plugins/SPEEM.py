@@ -1,13 +1,11 @@
 """Provides data loading for the Lanzara group SPEEM."""
+
 import copy
-import os.path
-import warnings
 
 import pickle
 import numpy as np
 from scipy.interpolate import griddata
 
-import arpes.config
 import xarray as xr
 from arpes.endstations import EndstationBase
 from arpes.provenance import provenance_from_file
@@ -61,7 +59,10 @@ class SPEEMEndstation(EndstationBase):
     def coordinate_conversion(
         self, count_list: np.ndarray, conversion_table: np.ndarray
     ) -> np.ndarray:
-        """Converts x, y, t detector coordinates to photoemission angle/position and energy."""
+        """
+        Converts x, y, t detector coordinates to photoemission angle/position and
+        energy.
+        """
         radius = np.hypot(count_list[:, 0], count_list[:, 1])
         theta = np.arctan2(count_list[:, 1], count_list[:, 0])
 
@@ -82,11 +83,12 @@ class SPEEMEndstation(EndstationBase):
         return np.stack((phi, psi, kinetic_energy), axis=1)
 
     def load(self, scan_desc: dict, conversion_table: np.ndarray, **kwargs):
-        """Loads a pickle file from the SPEEM DAQ.
+        """
+        Loads a pickle file from the SPEEM DAQ.
 
-        Params:
-            scan_desc: Dictionary with extra information to attach to the xarray.Dataset, must contain the location
-              of the file
+        Args:
+            scan_desc: Dictionary with extra information to attach to the
+            xarray.Dataset, must contain the location of the file
 
         Returns:
             The loaded spectrum.

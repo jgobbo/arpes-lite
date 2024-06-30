@@ -1,7 +1,6 @@
 """Shows cut orientations for scans in Brillouin zones."""
-import warnings
 
-import arpes.config
+import warnings
 
 import numpy as np
 import xarray as xr
@@ -71,7 +70,9 @@ class BZTool:
             image_waypoints = self.current_material["image_waypoints"]
             if not image_waypoints[0]:
                 warnings.warn(
-                    "Missing waypoints for material: {}".format(self.current_material["name"])
+                    "Missing waypoints for material: {}".format(
+                        self.current_material["name"]
+                    )
                 )
                 image_waypoints = [
                     [0, 1, 0, 1],
@@ -96,12 +97,12 @@ class BZTool:
                 (way_pp_ky - way_p_ky),
             )
 
-            self.image_data.coords["y"].values = (self.image_data.coords["y"].values - way_p_x) * (
-                dkx / dx
-            ) + way_p_kx
-            self.image_data.coords["x"].values = (self.image_data.coords["x"].values - way_p_y) * (
-                -dky / dy
-            ) - way_p_ky
+            self.image_data.coords["y"].values = (
+                self.image_data.coords["y"].values - way_p_x
+            ) * (dkx / dx) + way_p_kx
+            self.image_data.coords["x"].values = (
+                self.image_data.coords["x"].values - way_p_y
+            ) * (-dky / dy) - way_p_ky
 
             self.ax.clear()
             self.image_data.values = self.image_data.values[::-1, :]
@@ -140,7 +141,8 @@ class BZTool:
             coords=coords,
             attrs={
                 "work_function": self.current_material.get("work_function", 4.2) or 4.2,
-                "inner_potential": self.current_material.get("inner_potential", 10) or 10,
+                "inner_potential": self.current_material.get("inner_potential", 10)
+                or 10,
                 "phi_offset": coords_from_widgets["phi"],
             },
         )

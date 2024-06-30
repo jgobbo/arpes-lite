@@ -4,4 +4,10 @@ import pint
 
 ureg = pint.UnitRegistry()
 
-SETTINGS = {"use_tex": False, "DEBUG": True}
+SETTINGS = {
+    "use_tex": False,
+    "DEBUG": True,
+    "LOGGING": False,
+    "logging_started": False,
+    "LOGGING_FILE": None,
+}

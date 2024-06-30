@@ -14,8 +14,6 @@ something quick. As examples:
 
 All of these return a "context" object which can be used to get information from the current
 session (i.e. the selected points or regions, or modified data).
-If you forget to save this context, you can recover it as the most recent context
-is saved at `arpes.config.CONFIG` under the key "CURRENT_CONTEXT".
 
 There are also primitives for building interactive tools in matplotlib. Such as
 DataArrayView, which provides an interactive and updatable plot view from an
@@ -47,7 +45,6 @@ from matplotlib.widgets import (
     TextBox,
 )
 
-import arpes.config
 from arpes.fits import LorentzianModel, broadcast_model
 from arpes.plotting.utils import fancy_labels, imshow_arr, invisible_axes
 from arpes.utilities import normalize_to_spectrum
@@ -239,7 +236,9 @@ class DataArrayView:
             self._initialized = True
             self.n_dims = len(new_data.dims)
             if self.n_dims == 2:
-                self._axis_image = imshow_arr(self._data, ax=self.ax, **self.ax_kwargs)[1]
+                self._axis_image = imshow_arr(self._data, ax=self.ax, **self.ax_kwargs)[
+                    1
+                ]
                 fancy_labels(self.ax)
             else:
                 self.ax_kwargs.pop("cmap", None)
@@ -272,7 +271,9 @@ class DataArrayView:
     @property
     def mask_cmap(self):
         if self._mask_cmap is None:
-            self._mask_cmap = matplotlib.cm.get_cmap(self.mask_kwargs.pop("cmap", "Reds"))
+            self._mask_cmap = matplotlib.cm.get_cmap(
+                self.mask_kwargs.pop("cmap", "Reds")
+            )
             self._mask_cmap.set_bad("k", alpha=0)
 
         return self._mask_cmap
@@ -291,7 +292,9 @@ class DataArrayView:
 
         self._mask = new_mask
 
-        for_mask = np.ma.masked_where(np.logical_not(self._mask), self.data.values * 0 + 1)
+        for_mask = np.ma.masked_where(
+            np.logical_not(self._mask), self.data.values * 0 + 1
+        )
         if self.n_dims == 2 and self._transpose_mask:
             for_mask = for_mask.T
 
@@ -347,9 +350,13 @@ def fit_initializer(data, peak_type=LorentzianModel, **kwargs):
     for_fit.coords["fit_dim"] = np.array([0])
 
     data_view = DataArrayView(ax_initial)
-    residual_view = DataArrayView(ax_fitted, ax_kwargs=dict(linestyle=":", color="orange"))
+    residual_view = DataArrayView(
+        ax_fitted, ax_kwargs=dict(linestyle=":", color="orange")
+    )
     fitted_view = DataArrayView(ax_fitted, ax_kwargs=dict(color="red"))
-    initial_fit_view = DataArrayView(ax_fitted, ax_kwargs=dict(linestyle="--", color="blue"))
+    initial_fit_view = DataArrayView(
+        ax_fitted, ax_kwargs=dict(linestyle="--", color="blue")
+    )
 
     def compute_parameters():
         renamed = [
@@ -367,7 +374,11 @@ def fit_initializer(data, peak_type=LorentzianModel, **kwargs):
 
         model_settings.append(
             {
-                "center": {"value": center, "min": center - sigma, "max": center + sigma},
+                "center": {
+                    "value": center,
+                    "min": center - sigma,
+                    "max": center + sigma,
+                },
                 "sigma": {"value": sigma},
                 "amplitude": {"min": 0, "value": amplitude},
             }
@@ -375,7 +386,9 @@ def fit_initializer(data, peak_type=LorentzianModel, **kwargs):
         model_defs.append(LorentzianModel)
 
         if model_defs:
-            results = broadcast_model(model_defs, for_fit, "fit_dim", params=compute_parameters())
+            results = broadcast_model(
+                model_defs, for_fit, "fit_dim", params=compute_parameters()
+            )
             result = results.results[0].item()
 
             if result is not None:
@@ -421,7 +434,12 @@ def fit_initializer(data, peak_type=LorentzianModel, **kwargs):
 
 @popout
 def pca_explorer(
-    pca, data, component_dim="components", initial_values=None, transpose_mask=False, **kwargs
+    pca,
+    data,
+    component_dim="components",
+    initial_values=None,
+    transpose_mask=False,
+    **kwargs
 ):
     """A tool providing PCA decomposition exploration of a dataset.
 
@@ -448,7 +466,6 @@ def pca_explorer(
         "selector": None,
         "integration_region": {},
     }
-    arpes.config.CONFIG["CURRENT_CONTEXT"] = context
 
     def compute_for_scatter():
         for_scatter = pca.copy(deep=True).isel(
@@ -487,7 +504,9 @@ def pca_explorer(
             context["sum_data"] = data.stack(pca_dims=pca_dims).sum("pca_dims")
         else:
             context["selected_indices"] = ind
-            context["sum_data"] = data.stack(pca_dims=pca_dims).isel(pca_dims=ind).sum("pca_dims")
+            context["sum_data"] = (
+                data.stack(pca_dims=pca_dims).isel(pca_dims=ind).sum("pca_dims")
+            )
 
         if context["integration_region"] is not None:
             data_sel = data.sel(**context["integration_region"]).sum(other_dims)
@@ -503,7 +522,9 @@ def pca_explorer(
         ax_components.clear()
         context["selected_components"] = [component_x, component_y]
         for_scatter, size = compute_for_scatter()
-        pts = ax_components.scatter(for_scatter.values[0], for_scatter.values[1], s=size)
+        pts = ax_components.scatter(
+            for_scatter.values[0], for_scatter.values[1], s=size
+        )
 
         if context["selector"] is not None:
             context["selector"].disconnect()
@@ -539,8 +560,12 @@ def pca_explorer(
 
     context["axis_button"] = Button(ax_widget_1, "Change Decomp Axes")
     context["axis_button"].on_clicked(on_change_axes)
-    context["axis_X_input"] = TextBox(ax_widget_2, "Axis X:", initial=str(initial_values[0]))
-    context["axis_Y_input"] = TextBox(ax_widget_3, "Axis Y:", initial=str(initial_values[1]))
+    context["axis_X_input"] = TextBox(
+        ax_widget_2, "Axis X:", initial=str(initial_values[0])
+    )
+    context["axis_Y_input"] = TextBox(
+        ax_widget_3, "Axis Y:", initial=str(initial_values[1])
+    )
 
     def on_select_summed(region):
         context["integration_region"] = region
@@ -575,7 +600,6 @@ def kspace_tool(
     data = data.copy(deep=True)
 
     ctx = {"original_data": original_data, "data": data, "widgets": []}
-    arpes.config.CONFIG["CURRENT_CONTEXT"] = ctx
     gs = gridspec.GridSpec(4, 3)
     ax_initial = plt.subplot(gs[0:2, 0:2])
     ax_converted = plt.subplot(gs[2:, 0:2])
@@ -590,7 +614,9 @@ def kspace_tool(
             fn(ax_converted)
 
     n_widget_axes = 8
-    gs_widget = gridspec.GridSpecFromSubplotSpec(n_widget_axes, 1, subplot_spec=gs[:, 2])
+    gs_widget = gridspec.GridSpecFromSubplotSpec(
+        n_widget_axes, 1, subplot_spec=gs[:, 2]
+    )
 
     widget_axes = [plt.subplot(gs_widget[i, 0]) for i in range(n_widget_axes)]
     [invisible_axes(a) for a in widget_axes[:-2]]
@@ -684,7 +710,6 @@ def kspace_tool(
 def pick_rectangles(data, **kwargs):
     """A utility allowing for selection of rectangular regions."""
     ctx = {"points": [], "rect_next": False}
-    arpes.config.CONFIG["CURRENT_CONTEXT"] = ctx
 
     rects = []
 
@@ -754,7 +779,6 @@ def pick_points(data_or_str, **kwargs):
     using_image_data = isinstance(data_or_str, (str, pathlib.Path))
 
     ctx = {"points": []}
-    arpes.config.CONFIG["CURRENT_CONTEXT"] = ctx
 
     fig = plt.figure()
 

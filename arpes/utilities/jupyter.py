@@ -1,4 +1,5 @@
 """Tools to get information about the running notebook and kernel."""
+
 import datetime
 import json
 import os
@@ -95,7 +96,10 @@ def get_recent_history(n_items=10) -> List[str]:
         ipython = IPython.get_ipython()
 
         return [
-            l[-1] for l in list(ipython.history_manager.get_tail(n=n_items, include_latest=True))
+            l[-1]
+            for l in list(
+                ipython.history_manager.get_tail(n=n_items, include_latest=True)
+            )
         ]
     except (ImportError, AttributeError):
         return ["No accessible history."]
@@ -103,14 +107,14 @@ def get_recent_history(n_items=10) -> List[str]:
 
 def get_recent_logs(n_bytes=1000) -> List[str]:
     """Fetches a recent chunk of user logs. Used to populate a context on provenance outputs."""
-    import arpes.config
+    from arpes.settings import SETTINGS
 
     try:
         import IPython
 
         ipython = IPython.get_ipython()
-        if arpes.config.CONFIG["LOGGING_STARTED"]:
-            logging_file = arpes.config.CONFIG["LOGGING_FILE"]
+        if SETTINGS["logging_started"]:
+            logging_file = SETTINGS["LOGGING_FILE"]
 
             print(logging_file)
             with open(logging_file, "rb") as file:
@@ -122,7 +126,9 @@ def get_recent_logs(n_bytes=1000) -> List[str]:
                 lines = file.readlines()
 
             # ensure we get the most recent information
-            final_cell = ipython.history_manager.get_tail(n=1, include_latest=True)[0][-1]
+            final_cell = ipython.history_manager.get_tail(n=1, include_latest=True)[0][
+                -1
+            ]
             return [l.decode() for l in lines] + [final_cell]
 
     except (ImportError, AttributeError):

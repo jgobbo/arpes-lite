@@ -13,7 +13,6 @@ import weakref
 import warnings
 from typing import List, Optional, Union
 
-import arpes.config
 from arpes.utilities.qt.data_array_image_view import DataArrayPlot
 
 from arpes.fits.utilities import result_to_hints

@@ -10,9 +10,9 @@ import h5py
 from pathlib import Path
 from typing import Any, Dict, List, Union
 import copy
-import arpes.constants
 import os.path
 
+import arpes.config
 from arpes.utilities.dict import case_insensitive_get
 from arpes.utilities.xarray import rename_dataset_keys
 from arpes.endstations.utilities.hdf5 import (
@@ -147,11 +147,7 @@ class EndstationBase:
         * `._USE_REGEX`: Controlling literal or regex filename checking
         * `._TOLERATED_EXTENSIONS`: Controlling whether files should be rejected based on their extension.
         """
-        workspace = arpes.config.CONFIG["WORKSPACE"]
-        workspace_path = os.path.join(workspace["path"], "data")
-        workspace = workspace["name"]
-
-        base_dir = workspace_path or os.path.join(arpes.config.DATA_PATH, workspace)
+        base_dir = getattr(arpes.config, "data_root", os.getcwd())
         dir_options = [
             os.path.join(base_dir, option) for option in cls._SEARCH_DIRECTORIES
         ]
@@ -371,7 +367,9 @@ class SingleFileEndstation(EndstationBase):
         original_data_loc = scan_desc.get("path", scan_desc.get("file"))
         p = Path(original_data_loc)
         if not p.exists():
-            original_data_loc = os.path.join(arpes.config.DATA_PATH, original_data_loc)
+            original_data_loc = os.path.join(
+                getattr(arpes.config, "data_root", os.getcwd()), original_data_loc
+            )
 
         p = Path(original_data_loc)
         return [p]

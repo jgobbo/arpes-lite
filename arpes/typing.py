@@ -11,15 +11,14 @@ literally already data.
 
 import uuid
 
-import typing
 import xarray as xr
 import numpy as np
 
 __all__ = ["DTypeLike", "DataType", "NormalizableDataType", "xr_types"]
 
-DTypeLike = typing.Union[np.dtype, None, type, str]
+DTypeLike = np.dtype | None | type | str
 
-DataType = typing.Union[xr.DataArray, xr.Dataset]
-NormalizableDataType = typing.Union[DataType, str, uuid.UUID]
+DataType = xr.DataArray | xr.Dataset
+NormalizableDataType = DataType | str | uuid.UUID
 
 xr_types = (xr.DataArray, xr.Dataset)
