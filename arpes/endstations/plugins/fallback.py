@@ -1,5 +1,5 @@
 """Implements dynamic plugin selection when users do not specify the location for their data."""
-from arpes.trace import traceable
+
 import warnings
 
 from arpes.endstations import EndstationBase, resolve_endstation
@@ -35,8 +35,7 @@ class FallbackEndstation(EndstationBase):
     ]
 
     @classmethod
-    @traceable
-    def determine_associated_loader(cls, file, scan_desc, trace=None):
+    def determine_associated_loader(cls, file, scan_desc):
         """Determines which loading plugin to use for a given piece of data.
 
         This is done by looping through loaders in a predetermined priority order,
@@ -47,8 +46,6 @@ class FallbackEndstation(EndstationBase):
         arpes.config.load_plugins()
 
         for location in cls.ATTEMPT_ORDER:
-            trace(f"{cls.__name__} is trying {location}")
-
             try:
                 endstation_cls = resolve_endstation(False, location=location)
                 if endstation_cls.is_file_accepted(file, scan_desc):
@@ -56,7 +53,9 @@ class FallbackEndstation(EndstationBase):
             except:
                 pass
 
-        raise ValueError(f"PyARPES failed to find a plugin acceptable for {file}, \n\n{scan_desc}.")
+        raise ValueError(
+            f"PyARPES failed to find a plugin acceptable for {file}, \n\n{scan_desc}."
+        )
 
     def load(self, scan_desc: dict = None, file=None, **kwargs):
         """Delegates to a dynamically chosen plugin for loading."""
@@ -64,7 +63,7 @@ class FallbackEndstation(EndstationBase):
             file = scan_desc["file"]
 
         associated_loader = FallbackEndstation.determine_associated_loader(
-            file, scan_desc, trace=self.trace
+            file, scan_desc
         )
 
         try:

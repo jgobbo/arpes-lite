@@ -9,9 +9,8 @@ Additionally, we have exact inverses for the volumetric transforms which are
 useful for aligning cuts which use those transforms. 
 See `convert_coordinate_forward`.
 """
+
 from arpes.utilities.conversion.core import convert_to_kspace
-from typing import Callable, Dict
-from arpes.trace import traceable
 import numpy as np
 import warnings
 import xarray as xr
@@ -36,10 +35,7 @@ __all__ = (
 )
 
 
-@traceable
-def convert_coordinate_forward(
-    data: DataType, coords: Dict[str, float], trace: Callable = None, **k_coords
-):
+def convert_coordinate_forward(data: DataType, coords: dict[str, float], **k_coords):
     """This function is the inverse/forward transform for the small angle volumetric k-conversion code.
 
     This differs from the other forward transforms here which are exact, up to correct assignment
@@ -71,7 +67,6 @@ def convert_coordinate_forward(
     Args:
         data: The data defining the coordinate offsets and experiment geometry.
         coords: The coordinates of a point in angle-space to be converted.
-        trace: Used for performance tracing and debugging.
 
     Returns:
         The location of the desired coordinate in momentum.
@@ -98,44 +93,35 @@ def convert_coordinate_forward(
         }
 
     # Copying after taking a constant energy plane is much much cheaper
-    trace("Copying")
     data = data.copy(deep=True)
 
     data.loc[data.G.round_coordinates(coords)] = data.values.max() * 100000
-    trace("Filtering")
     data = gaussian_filter_arr(data, default_size=3)
 
-    trace("Converting once")
-    kdata = convert_to_kspace(data, **k_coords, trace=trace)
+    kdata = convert_to_kspace(data, **k_coords)
 
-    trace("argmax")
     near_target = kdata.G.argmax_coords()
 
-    trace("Converting twice")
     kdata_close = convert_to_kspace(
         data,
-        trace=trace,
         **{k: np.linspace(v - 0.08, v + 0.08, 100) for k, v in near_target.items()},
     )
 
     # inconsistently, the energy coordinate is sometimes returned here
     # so we remove it just in case
-    trace("argmax")
     coords = kdata_close.G.argmax_coords()
     if "eV" in coords:
         del coords["eV"]
     return coords
 
 
-@traceable
 def convert_through_angular_pair(
     data: DataType,
-    first_point: Dict[str, float],
-    second_point: Dict[str, float],
-    cut_specification: Dict[str, np.ndarray],
-    transverse_specification: Dict[str, np.ndarray],
+    first_point: dict[str, float],
+    second_point: dict[str, float],
+    cut_specification: dict[str, np.ndarray],
+    transverse_specification: dict[str, np.ndarray],
     relative_coords: bool = True,
-    trace: Callable = None,
     **k_coords,
 ):
     """Converts the lower dimensional ARPES cut passing through `first_point` and `second_point`.
@@ -168,20 +154,23 @@ def convert_through_angular_pair(
           axis on the momentum converted data.
         relative_coords: Whether to give `cut_specification` relative to the momentum
           converted location specified in `coords`
-        trace: Flag controlling execution tracing
         k_coords: Passed as hints through to `convert_coordinate_forward`.
 
     Returns:
         The momentum cut passing first through `first_point` and then through `second_point`.
     """
-    k_first_point = convert_coordinate_forward(data, first_point, trace=trace, **k_coords)
-    k_second_point = convert_coordinate_forward(data, second_point, trace=trace, **k_coords)
+    k_first_point = convert_coordinate_forward(data, first_point, **k_coords)
+    k_second_point = convert_coordinate_forward(data, second_point, **k_coords)
 
     k_dims = set(k_first_point.keys())
     if k_dims != {"kx", "ky"}:
-        raise NotImplementedError(f"Two point {k_dims} momentum conversion is not supported yet.")
+        raise NotImplementedError(
+            f"Two point {k_dims} momentum conversion is not supported yet."
+        )
 
-    assert k_dims == set(cut_specification.keys()).union(transverse_specification.keys())
+    assert k_dims == set(cut_specification.keys()).union(
+        transverse_specification.keys()
+    )
     assert (
         "ky" in transverse_specification.keys()
     )  # You must use ky as the transverse coordinate for now
@@ -191,13 +180,10 @@ def convert_through_angular_pair(
         k_second_point["ky"] - k_first_point["ky"],
         k_second_point["kx"] - k_first_point["kx"],
     )
-    trace(f"Determined offset angle {-offset_ang}")
 
     with data.S.with_rotation_offset(-offset_ang):
-        trace(f"Finding first momentum coordinate.")
-        k_first_point = convert_coordinate_forward(data, first_point, trace=trace, **k_coords)
-        trace(f"Finding second momentum coordinate.")
-        k_second_point = convert_coordinate_forward(data, second_point, trace=trace, **k_coords)
+        k_first_point = convert_coordinate_forward(data, first_point, **k_coords)
+        k_second_point = convert_coordinate_forward(data, second_point, **k_coords)
 
         # adjust output coordinate ranges
         transverse_specification = {
@@ -217,12 +203,12 @@ def convert_through_angular_pair(
             parallel_axis = np.linspace(left_point, right_point, len(parallel_axis))
 
         # perform the conversion
-        trace(f"Performing final momentum conversion.")
         converted_data = convert_to_kspace(
-            data, **transverse_specification, kx=parallel_axis, trace=trace
+            data,
+            **transverse_specification,
+            kx=parallel_axis,
         ).mean(list(transverse_specification.keys()))
 
-        trace(f"Annotating the requested point momentum values.")
         converted_data = converted_data.assign_attrs(
             {
                 "first_point_kx": k_first_point[parallel_dim],
@@ -233,14 +219,12 @@ def convert_through_angular_pair(
         return converted_data
 
 
-@traceable
 def convert_through_angular_point(
     data: DataType,
-    coords: Dict[str, float],
-    cut_specification: Dict[str, np.ndarray],
-    transverse_specification: Dict[str, np.ndarray],
+    coords: dict[str, float],
+    cut_specification: dict[str, np.ndarray],
+    transverse_specification: dict[str, np.ndarray],
     relative_coords: bool = True,
-    trace: Callable = None,
     **k_coords,
 ) -> xr.DataArray:
     """Converts the lower dimensional ARPES cut passing through given angular `coords`.
@@ -259,24 +243,29 @@ def convert_through_angular_point(
           axis on the momentum converted data.
         relative_coords: Whether to give `cut_specification` relative to the momentum
           converted location specified in `coords`
-        trace: Flag controlling execution tracing
         k_coords: Passed as hints through to `convert_coordinate_forward`.
 
     Returns:
         A momentum cut passing through the point `coords`.
     """
-    k_coords = convert_coordinate_forward(data, coords, trace=trace, **k_coords)
+    k_coords = convert_coordinate_forward(data, coords, **k_coords)
     all_momentum_dims = set(k_coords.keys())
-    assert all_momentum_dims == set(cut_specification.keys()).union(transverse_specification.keys())
+    assert all_momentum_dims == set(cut_specification.keys()).union(
+        transverse_specification.keys()
+    )
 
     # adjust output coordinate ranges
-    transverse_specification = {k: v + k_coords[k] for k, v in transverse_specification.items()}
+    transverse_specification = {
+        k: v + k_coords[k] for k, v in transverse_specification.items()
+    }
     if relative_coords:
         cut_specification = {k: v + k_coords[k] for k, v in cut_specification.items()}
 
     # perform the conversion
     converted_data = convert_to_kspace(
-        data, **transverse_specification, **cut_specification, trace=trace
+        data,
+        **transverse_specification,
+        **cut_specification,
     ).mean(list(transverse_specification.keys()), keep_attrs=True)
 
     for k, v in k_coords.items():
@@ -299,7 +288,9 @@ def convert_coordinates(arr: DataType, collapse_parallel=False, **kwargs):
                 return c
 
     coord_names = ["phi", "psi", "alpha", "theta", "beta", "chi", "hv"]
-    raw_coords = {k: unwrap_coord(arr.S.lookup_offset_coord(k)) for k in (coord_names + ["eV"])}
+    raw_coords = {
+        k: unwrap_coord(arr.S.lookup_offset_coord(k)) for k in (coord_names + ["eV"])
+    }
     raw_angles = {k: v for k, v in raw_coords.items() if k not in {"eV", "hv"}}
 
     parallel_collapsible = (
@@ -308,7 +299,8 @@ def convert_coordinates(arr: DataType, collapse_parallel=False, **kwargs):
 
     sort_by = ["eV", "hv", "phi", "psi", "alpha", "theta", "beta", "chi"]
     old_dims = sorted(
-        [k for k in arr.dims if k in (coord_names + ["eV"])], key=lambda item: sort_by.index(item)
+        [k for k in arr.dims if k in (coord_names + ["eV"])],
+        key=lambda item: sort_by.index(item),
     )
 
     will_collapse = parallel_collapsible and collapse_parallel
@@ -323,7 +315,9 @@ def convert_coordinates(arr: DataType, collapse_parallel=False, **kwargs):
 
     # build the full kinetic energy array over relevant dimensions
     kinetic_energy = (
-        expand_to("eV", raw_coords["eV"]) + expand_to("hv", raw_coords["hv"]) - arr.S.work_function
+        expand_to("eV", raw_coords["eV"])
+        + expand_to("hv", raw_coords["hv"])
+        - arr.S.work_function
     )
 
     kx, ky, kz = full_angles_to_k(
@@ -333,12 +327,12 @@ def convert_coordinates(arr: DataType, collapse_parallel=False, **kwargs):
     )
 
     if will_collapse:
-        if np.sum(kx ** 2) > np.sum(ky ** 2):
-            sign = kx / np.sqrt(kx ** 2 + 1e-8)
+        if np.sum(kx**2) > np.sum(ky**2):
+            sign = kx / np.sqrt(kx**2 + 1e-8)
         else:
-            sign = ky / np.sqrt(ky ** 2 + 1e-8)
+            sign = ky / np.sqrt(ky**2 + 1e-8)
 
-        kp = sign * np.sqrt(kx ** 2 + ky ** 2)
+        kp = sign * np.sqrt(kx**2 + ky**2)
         data_vars = {"kp": (old_dims, np.squeeze(kp)), "kz": (old_dims, np.squeeze(kz))}
     else:
         data_vars = {
@@ -421,7 +415,9 @@ def convert_coordinates_to_kspace_forward(arr: DataType, **kwargs):
 
     raw_coords = {
         k: broadcast_by_dim_location(
-            v, projection_vectors.shape, full_old_dims.index(k) if k in full_old_dims else None
+            v,
+            projection_vectors.shape,
+            full_old_dims.index(k) if k in full_old_dims else None,
         )
         for k, v in raw_coords.items()
     }
@@ -515,7 +511,9 @@ def convert_coordinates_to_kspace_forward(arr: DataType, **kwargs):
         else:
             sign = raw_translated["ky"] / np.sqrt(raw_translated["ky"] ** 2 + 1e-8)
 
-        raw_translated["kp"] = np.sqrt(raw_translated["kx"] ** 2 + raw_translated["ky"] ** 2) * sign
+        raw_translated["kp"] = (
+            np.sqrt(raw_translated["kx"] ** 2 + raw_translated["ky"] ** 2) * sign
+        )
 
     data_vars = {}
     for dest_coord in dest_coords:

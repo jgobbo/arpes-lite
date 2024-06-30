@@ -1,13 +1,13 @@
 """Implements forward and reverse trapezoidal corrections."""
+
 import warnings
 import numpy as np
 import xarray as xr
 
 import numba
 
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable
 
-from arpes.trace import Trace, traceable
 from arpes.utilities import normalize_to_spectrum
 
 from .base import CoordinateConverter
@@ -60,7 +60,7 @@ def _phi_to_phi_forward(energy, phi, phi_out, l_fermi, l_volt, r_fermi, r_volt):
 class ConvertTrapezoidalCorrection(CoordinateConverter):
     """A converter for applying the trapezoidal correction to ARPES data."""
 
-    def __init__(self, *args: Any, corners: List[Dict[str, float]], **kwargs: Any):
+    def __init__(self, *args: Any, corners: list[dict[str, float]], **kwargs: Any):
         super().__init__(*args, **kwargs)
         self.phi = None
 
@@ -116,9 +116,9 @@ class ConvertTrapezoidalCorrection(CoordinateConverter):
         return phi_out
 
 
-@traceable
 def apply_trapezoidal_correction(
-    data: xr.DataArray, corners: List[Dict[str, float]], trace: Trace = None
+    data: xr.DataArray,
+    corners: list[dict[str, float]],
 ) -> xr.DataArray:
     """Applies the trapezoidal correction to data in angular units by linearly interpolating slices.
 
@@ -130,13 +130,11 @@ def apply_trapezoidal_correction(
         data: The xarray instances to perform correction on
         corners: These don't actually have to be corners, but are waypoints of the conversion. Use points near the Fermi
             level and near the bottom of the spectrum just at the edge of recorded angular region.
-        trace: A trace instance which can be used to enable execution tracing and debugging. Pass ``True`` to enable.
 
 
     Returns:
         The corrected data.
     """
-    trace("Normalizing to spectrum")
 
     if isinstance(data, dict):
         warnings.warn(
@@ -159,10 +157,8 @@ def apply_trapezoidal_correction(
 
     original_coords = data.coords
 
-    trace("Determining dimensions.")
     if "phi" not in data.dims:
         raise ValueError("The data must have a phi coordinate.")
-    trace("Replacing dummy coordinates with index-like ones.")
     removed = [d for d in data.dims if d not in ["eV", "phi"]]
     data = data.transpose(*(["eV", "phi"] + removed))
     converted_dims = data.dims
@@ -176,7 +172,6 @@ def apply_trapezoidal_correction(
     converter = ConvertTrapezoidalCorrection(data, converted_dims, corners=corners)
     converted_coordinates = converter.get_coordinates()
 
-    trace("Calling convert_coordinates")
     result = convert_coordinates(
         data,
         converted_coordinates,
@@ -186,10 +181,8 @@ def apply_trapezoidal_correction(
                 zip(data.dims, [converter.conversion_for(d) for d in data.dims])
             ),
         },
-        trace=trace,
     )
 
-    trace("Reassigning index-like coordinates.")
     result = result.assign_coords(**restore_index_like_coordinates)
     result = result.assign_coords(
         **{c: v for c, v in original_coords.items() if c not in result.coords}

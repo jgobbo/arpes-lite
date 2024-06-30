@@ -23,7 +23,6 @@ import arpes.fits.fit_models
 from typing import Callable, Union, Tuple, Any, Dict, List
 
 import xarray as xr
-from arpes.trace import traceable
 from arpes.provenance import update_provenance
 from arpes.typing import DataType
 from arpes.utilities import normalize_to_spectrum
@@ -34,7 +33,9 @@ __all__ = ("broadcast_model", "result_to_hints")
 
 TypeIterable = Union[List[type], Tuple[type]]
 
-XARRAY_REQUIRES_VALUES_WRAPPING = version.parse(xr.__version__) > version.parse("0.10.0")
+XARRAY_REQUIRES_VALUES_WRAPPING = version.parse(xr.__version__) > version.parse(
+    "0.10.0"
+)
 
 
 def wrap_for_xarray_values_unpacking(item):
@@ -45,7 +46,9 @@ def wrap_for_xarray_values_unpacking(item):
     return item
 
 
-def result_to_hints(m: lmfit.model.ModelResult, defaults=None) -> Dict[str, Dict[str, Any]]:
+def result_to_hints(
+    m: lmfit.model.ModelResult, defaults=None
+) -> Dict[str, Dict[str, Any]]:
     """Turns an `lmfit.model.ModelResult` into a dictionary with initial guesses.
 
     Args:
@@ -105,7 +108,6 @@ def parse_model(model):
 
 
 @update_provenance("Broadcast a curve fit along several dimensions")
-@traceable
 def broadcast_model(
     model_cls: Union[type, TypeIterable],
     data: DataType,
@@ -117,7 +119,6 @@ def broadcast_model(
     prefixes=None,
     window=None,
     parallelize=None,
-    trace: Callable = None,
 ):
     """Perform a fit across a number of dimensions.
 
@@ -135,7 +136,6 @@ def broadcast_model(
         window: A specification of cuts/windows to apply to each curve fit
         parallelize: Whether to parallelize curve fits, defaults to True if unspecified and more
           than 20 fits were requested
-        trace: Controls whether execution tracing/timestamping is used for performance investigation
 
     Returns:
         An `xr.Dataset` containing the curve fitting results. These are data vars:
@@ -151,7 +151,6 @@ def broadcast_model(
     if isinstance(broadcast_dims, str):
         broadcast_dims = [broadcast_dims]
 
-    trace("Normalizing to spectrum")
     data = normalize_to_spectrum(data)
 
     cs = {}
@@ -166,11 +165,9 @@ def broadcast_model(
     if parallelize is None:
         parallelize = n_fits > 20
 
-    trace("Copying residual")
     residual = data.copy(deep=True)
     residual.values = np.zeros(residual.shape)
 
-    trace("Parsing model")
     model = parse_model(model_cls)
 
     wrap_progress = lambda x, *_, **__: x
@@ -190,19 +187,18 @@ def broadcast_model(
     )
 
     if parallelize:
-        trace(f"Running fits (nfits={n_fits}) in parallel (n_threads={os.cpu_count()})")
-
         # print("Running on multiprocessing pool... this may take a while the first time.")
         from .hot_pool import hot_pool
 
         pool = hot_pool.pool
         exe_results = list(
             wrap_progress(
-                pool.imap(fitter, template.G.iter_coords()), total=n_fits, desc="Fitting on pool..."
+                pool.imap(fitter, template.G.iter_coords()),
+                total=n_fits,
+                desc="Fitting on pool...",
             )
         )
     else:
-        trace(f"Running fits (nfits={n_fits}) serially")
         exe_results = []
         for _, cut_coords in wrap_progress(
             template.G.enumerate_iter_coords(), desc="Fitting", total=n_fits
@@ -210,7 +206,6 @@ def broadcast_model(
             exe_results.append(fitter(cut_coords))
 
     if serialize:
-        trace("Deserializing...")
         # print("Deserializing...")
 
         def unwrap(result_data):
@@ -222,12 +217,10 @@ def broadcast_model(
         exe_results = [(unwrap(res), residual, cs) for res, residual, cs in exe_results]
         # print("Finished deserializing")
 
-    trace(f"Finished running fits Collating")
     for fit_result, fit_residual, coords in exe_results:
         template.loc[coords] = wrap_for_xarray_values_unpacking(fit_result)
         residual.loc[coords] = fit_residual
 
-    trace("Bundling into dataset")
     return xr.Dataset(
         {
             "results": template,
