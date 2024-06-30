@@ -5,10 +5,6 @@ and pickling utilities.
 
 Heavy lifting is actually performed by the plugin definitions which know how to ingest
 different data formats into the PyARPES data model.
-
-TODO: An improvement could be made to the example data if served
-over a network and someone was willing to host a few larger pieces
-of data.
 """
 
 import warnings
@@ -239,7 +235,7 @@ def export_dataset(dataset: xr.Dataset, path: str | Path):
 
     if path.suffix != ".nc":
         warnings.warn(
-            "The path provided does not have a .nc extension. Adding one and continuing..."
+            "The provided path doesn't have a .nc extension. Adding one and continuing."
         )
         path = path.parent / f"{path.name}.nc"
     if not path.parent.exists():

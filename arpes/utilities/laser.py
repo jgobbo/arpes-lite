@@ -1,7 +1,7 @@
 """Utilities for estimating quantities of interest when using a laser for photoemission."""
 
 import pint
-from arpes.config import ureg
+from arpes.settings import ureg
 from typing import Optional
 
 __all__ = ("electrons_per_pulse", "electrons_per_pulse_mira")
@@ -36,6 +36,8 @@ def electrons_per_pulse(
     return (atto_coulombs * eles_per_attocoulomb).magnitude
 
 
-def electrons_per_pulse_mira(photocurrent: pint.Quantity, division_ratio: int = 1) -> float:
+def electrons_per_pulse_mira(
+    photocurrent: pint.Quantity, division_ratio: int = 1
+) -> float:
     """Specific case of `electrons_per_pulse` for Mira oscillators."""
     return electrons_per_pulse(photocurrent, mira_frequency, division_ratio)

@@ -325,6 +325,16 @@ class ARPESAccessorBase:
         dims.remove(dim)
         return self._obj.transpose(*(dims + [dim]))
 
+    def negate_energy(self):
+        """
+        Negates the energy coordinate on a piece of data. This is useful in changing
+        between KE/BE conventions when data is loaded.
+        """
+        if "eV" in self._obj.coords:
+            return self._obj.assign_coords(eV=-self._obj.coords["eV"].values)
+
+        return self._obj
+
     def select_around_data(
         self,
         points: Union[Dict[str, Any], xr.Dataset],
@@ -703,42 +713,6 @@ class ARPESAccessorBase:
             return first + _unwrap_provenance(rest)
 
         return _unwrap_provenance(provenance)
-
-    @property
-    def spectrometer(self):
-        ds = self._obj
-        spectrometers = {
-            "SToF": arpes.constants.SPECTROMETER_SPIN_TOF,
-            "ToF": arpes.constants.SPECTROMETER_STRAIGHT_TOF,
-            "DLD": arpes.constants.SPECTROMETER_DLD,
-            "BL7": arpes.constants.SPECTROMETER_BL7,
-            "ANTARES": arpes.constants.SPECTROMETER_ANTARES,
-        }
-
-        if "spectrometer_name" in ds.attrs:
-            return spectrometers.get(ds.attrs["spectrometer_name"])
-
-        if isinstance(ds, xr.Dataset):
-            if "up" in ds.data_vars or ds.attrs.get("18  MCP3") == 0:
-                return spectrometers["SToF"]
-        elif isinstance(ds, xr.DataArray):
-            if ds.name == "up" or ds.attrs.get("18  MCP3") == 0:
-                return spectrometers["SToF"]
-
-        if "location" in ds.attrs:
-            return {
-                "ALG-MC": arpes.constants.SPECTROMETER_MC,
-                "BL403": arpes.constants.SPECTROMETER_BL4,
-                "ALG-SToF": arpes.constants.SPECTROMETER_STRAIGHT_TOF,
-                "Kaindl": arpes.constants.SPECTROMETER_KAINDL,
-                "BL7": arpes.constants.SPECTROMETER_BL7,
-                "ANTARES": arpes.constants.SPECTROMETER_ANTARES,
-            }.get(ds.attrs["location"])
-
-        try:
-            return spectrometers[ds.attrs["spectrometer_name"]]
-        except KeyError:
-            return {}
 
     @property
     def dshape(self):
@@ -1714,17 +1688,6 @@ class ARPESAccessorBase:
         return ARPESAccessorBase.dict_to_html(
             {k: coordinate_dataarray_to_flat_rep(v) for k, v in coords.items()}
         )
-
-    def _repr_html_spectrometer_info(self):
-        skip_keys = {
-            "dof",
-        }
-        ordered_settings = OrderedDict(self.spectrometer_settings)
-        ordered_settings.update(
-            {k: v for k, v in self.spectrometer.items() if k not in skip_keys}
-        )
-
-        return ARPESAccessorBase.dict_to_html(ordered_settings)
 
     @staticmethod
     def _repr_html_experimental_conditions(conditions):

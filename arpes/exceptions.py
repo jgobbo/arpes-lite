@@ -12,11 +12,3 @@ class AnalysisError(Exception):
         A bad fit from scipy.optimize in an internal function or analysis
         routine that could not be handled by the user.
     """
-
-
-class ConfigurationError(Exception):
-    """Indicates that the user needs to supply more configuration.
-
-    This could be due to failing to set some directories in which to place plots,
-    or failing to indicate the appropriate workspace.
-    """
