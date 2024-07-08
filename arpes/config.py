@@ -3,7 +3,6 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 from matplotlib import pyplot as plt
-from warnings import warn
 
 from arpes.io import load_data, load_folder, export_dataset
 from arpes.plotting.stack_plot import stack_dispersion_plot
@@ -13,12 +12,14 @@ from arpes.analysis.general import rebin, normalize
 from arpes.analysis.filters import gaussian_filter_arr
 from arpes import xarray_extensions
 
+# from arpes.xarray_extensions import *
+
 from arpes.endstations.base import add_endstation
 from arpes.endstations.plugins.MAESTRO import MAESTROMicroARPESEndstation
 
 add_endstation(MAESTROMicroARPESEndstation)
-
 xr.set_options(keep_attrs=True)
+plt.rcParams["image.cmap"] = "magma"
 
 cwd = Path(os.getcwd())
 # We allow for one level of nesting in the directory structure
@@ -30,8 +31,10 @@ if cwd.name == "notebooks":
     results_root = root / "results"
 else:
     if cwd.parent.name != "notebooks":
-        warn(
-            "The designated directory structure isn't being met."
+        from warnings import warn as _warn
+
+        _warn(
+            "The designated directory structure isn't being met. "
             "The provided paths may not be correct."
         )
 
@@ -40,5 +43,3 @@ else:
     data_root = root / "data" / measurement_date
     exports_root = data_root / "exports"
     results_root = root / "results"
-
-plt.rcParams["image.cmap"] = "magma"

@@ -321,7 +321,7 @@ def fix_fermi_edge(
     Automatically corrects the Fermi edge in a dataset. If the measurement was done with
     a curved slit, the Fermi edge will only be shifted to 0. If the measurement was done
     with a straight slit, the Fermi edge will be shifted to 0 and the curved Fermi edge
-    will be corrected.
+    will be corrected (`slit_shape` attr needs to be set to `straight`).
 
     Args:
         ds: The dataset to correct

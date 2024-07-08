@@ -45,8 +45,7 @@ import collections
 import copy
 import itertools
 import warnings
-from collections import OrderedDict
-from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Iterator, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -71,10 +70,16 @@ from arpes.utilities.region import DesignatedRegions, normalize_region
 from arpes.utilities.xarray import unwrap_xarray_item, unwrap_xarray_dict
 
 
-__all__ = ["ARPESDataArrayAccessor", "ARPESDatasetAccessor", "ARPESFitToolsAccessor"]
+__all__ = [
+    "ARPESDataArrayAccessor",
+    "ARPESDatasetAccessor",
+    "ARPESFitToolsAccessor",
+    "GenericAccessorTools",
+    "SelectionToolAccessor",
+]
 
 
-def _iter_groups(grouped: Dict[str, Any]) -> Iterator[Any]:
+def _iter_groups(grouped: dict[str, Any]) -> Iterator[Any]:
     """Iterates through a flattened sequence.
 
     Sequentially yields keys and values from each sequence associated with a key.
@@ -94,7 +99,7 @@ def _iter_groups(grouped: Dict[str, Any]) -> Iterator[Any]:
 class ARPESAccessorBase:
     """Base class for the xarray extensions in PyARPES."""
 
-    _obj: xr.Dataset
+    _obj: DataType
 
     def along(self, directions, **kwargs):
         return slice_along_path(self._obj, directions, **kwargs)
@@ -314,12 +319,14 @@ class ARPESAccessorBase:
         return "dn_along_axis" in history or "curvature" in history
 
     def transpose_to_front(self, dim):
+        warnings.warn("Deprecated, use .transpose(dim, ...) instead.")
         dims = list(self._obj.dims)
         assert dim in dims
         dims.remove(dim)
         return self._obj.transpose(*([dim] + dims))
 
     def transpose_to_back(self, dim):
+        warnings.warn("Deprecated, use .transpose(..., dim) instead.")
         dims = list(self._obj.dims)
         assert dim in dims
         dims.remove(dim)
@@ -337,8 +344,8 @@ class ARPESAccessorBase:
 
     def select_around_data(
         self,
-        points: Union[Dict[str, Any], xr.Dataset],
-        radius: Dict[str, float] = None,
+        points: dict[str, Any]|xr.Dataset,
+        radius: dict[str, float] = None,
         fast: bool = False,
         safe: bool = True,
         mode: str = "sum",
@@ -475,8 +482,8 @@ class ARPESAccessorBase:
 
     def select_around(
         self,
-        point: Union[Dict[str, Any], xr.Dataset],
-        radius: Dict[str, float] = None,
+        point: dict[str, Any]|xr.Dataset,
+        radius: dict[str, float] = None,
         fast: bool = False,
         safe: bool = True,
         mode: str = "sum",
@@ -1140,7 +1147,7 @@ class ARPESAccessorBase:
 
     def region_sel(self, *regions):
         def process_region_selector(
-            selector: Union[slice, DesignatedRegions], dimension_name: str
+            selector: slice| DesignatedRegions, dimension_name: str
         ):
             if isinstance(selector, slice):
                 return selector
@@ -1212,7 +1219,7 @@ class ARPESAccessorBase:
         return obj
 
     def fat_sel(
-        self, widths: Optional[Dict[str, Any]] = None, **kwargs
+        self, widths: Optional[dict[str, Any]] = None, **kwargs
     ) -> xr.DataArray:
         """Allows integrating a selection over a small region.
 
@@ -1477,7 +1484,7 @@ class ARPESAccessorBase:
         }
 
     @property
-    def analyzer_info(self) -> Dict[str, Any]:
+    def analyzer_info(self) -> dict[str, Any]:
         """General information about the photoelectron analyzer used."""
         return unwrap_xarray_dict(
             {
@@ -1495,7 +1502,7 @@ class ARPESAccessorBase:
         )
 
     @property
-    def daq_info(self) -> Dict[str, Any]:
+    def daq_info(self) -> dict[str, Any]:
         """General information about the acquisition settings for an ARPES experiment."""
         return unwrap_xarray_dict(
             {
@@ -1515,7 +1522,7 @@ class ARPESAccessorBase:
         )
 
     @property
-    def beamline_info(self) -> Dict[str, Any]:
+    def beamline_info(self) -> dict[str, Any]:
         """Information about the beamline or light source used for a measurement."""
         return unwrap_xarray_dict(
             {
@@ -1532,7 +1539,7 @@ class ARPESAccessorBase:
         )
 
     @property
-    def sweep_settings(self) -> Dict[str, Any]:
+    def sweep_settings(self) -> dict[str, Any]:
         """For datasets acquired with swept acquisition settings, provides those settings."""
         return {
             "high_energy": self._obj.attrs.get("sweep_high_energy"),
@@ -1542,7 +1549,7 @@ class ARPESAccessorBase:
         }
 
     @property
-    def probe_polarization(self) -> Tuple[float, float]:
+    def probe_polarization(self) -> tuple[float, float]:
         """Provides the probe polarization of the UV/x-ray source."""
         return (
             self._obj.attrs.get("probe_polarization_theta"),
@@ -1550,7 +1557,7 @@ class ARPESAccessorBase:
         )
 
     @property
-    def pump_polarization(self) -> Tuple[float, float]:
+    def pump_polarization(self) -> tuple[float, float]:
         """For Tr-ARPES experiments, provides the pump polarization."""
         return (
             self._obj.attrs.get("pump_polarization_theta"),
@@ -1558,7 +1565,7 @@ class ARPESAccessorBase:
         )
 
     @property
-    def prebinning(self) -> Dict[str, Any]:
+    def prebinning(self) -> dict[str, Any]:
         """Information about the prebinning performed during scan acquisition."""
         prebinning = {}
         for d in self._obj.indexes:
@@ -1568,14 +1575,14 @@ class ARPESAccessorBase:
         return prebinning
 
     @property
-    def monochromator_info(self) -> Dict[str, Any]:
+    def monochromator_info(self) -> dict[str, Any]:
         """Details about the monochromator used on the UV/x-ray source."""
         return {
             "grating_lines_per_mm": self._obj.attrs.get("grating_lines_per_mm"),
         }
 
     @property
-    def undulator_info(self) -> Dict[str, Any]:
+    def undulator_info(self) -> dict[str, Any]:
         """Details about the undulator for data performed at an undulator source."""
         return {
             "gap": self._obj.attrs.get("undulator_gap"),
@@ -1586,7 +1593,7 @@ class ARPESAccessorBase:
         }
 
     @property
-    def analyzer_detail(self) -> Dict[str, Any]:
+    def analyzer_detail(self) -> dict[str, Any]:
         """Details about the analyzer, its capabilities, and metadata."""
         return {
             "name": self._obj.attrs.get("analyzer_name"),
@@ -1597,7 +1604,7 @@ class ARPESAccessorBase:
         }
 
     @property
-    def temp(self) -> Union[float, xr.DataArray]:
+    def temp(self) -> float| xr.DataArray:
         """The temperature at which an experiment was performed."""
         prefered_attrs = [
             "TA",
@@ -1621,7 +1628,7 @@ class ARPESAccessorBase:
         raise AttributeError("Could not read temperature off any standard attr")
 
     @property
-    def condensed_attrs(self) -> Dict[str, Any]:
+    def condensed_attrs(self) -> dict[str, Any]:
         """An attributes shortlist.
 
         Since we enforce camelcase on attributes, this is a reasonable filter that catches
@@ -2010,7 +2017,7 @@ class GenericAccessorTools:
         norm = self._obj - low
         return norm / (high - low)
 
-    def extent(self, *args, dims=None) -> Tuple[float, float, float, float]:
+    def extent(self, *args, dims=None) -> tuple[float, float, float, float]:
         """Returns an "extent" array that can be used to draw with plt.imshow."""
         if dims is None:
             if not args:
@@ -2057,7 +2064,7 @@ class GenericAccessorTools:
         return self.transform_coords(dims, scale)
 
     def transform_coords(
-        self, dims: List[str], transform: Union[np.ndarray, Callable]
+        self, dims: list[str], transform: np.ndarray| Callable
     ) -> xr.DataArray:
         """Transforms the given coordinate values according to an arbitrary function.
 
@@ -2120,7 +2127,7 @@ class GenericAccessorTools:
 
         return o
 
-    def ravel(self) -> Dict[str, xr.DataArray]:
+    def ravel(self) -> dict[str, xr.DataArray]:
         """Converts to a flat representation where the coordinate values are also present.
 
         Extremely valuable for plotting a dataset with coordinates, X, Y and values Z(X,Y)
@@ -2168,7 +2175,7 @@ class GenericAccessorTools:
 
         return meshed_coordinates
 
-    def to_arrays(self) -> Tuple[np.ndarray, np.ndarray]:
+    def to_arrays(self) -> tuple[np.ndarray, np.ndarray]:
         """Converts a (1D) `xr.DataArray` into two plain ``ndarray``s of their coordinate and data.
 
         Useful for rapidly converting into a format than can be `plt.scatter`ed
@@ -2275,7 +2282,7 @@ class GenericAccessorTools:
 
     def transform(
         self,
-        axes: Union[str, List[str]],
+        axes: str| list[str],
         transform_fn: Callable,
         dtype: DTypeLike = None,
         *args,
@@ -2482,7 +2489,7 @@ class SelectionToolAccessor:
         self._obj = xarray_obj
 
     def max_in_window(
-        self, around: xr.DataArray, window: Union[float, int], n_iters: int = 1
+        self, around: xr.DataArray, window: float| int, n_iters: int = 1
     ):
         # TODO: refactor into a transform and finish the transform refactor to allow
         # simultaneous iteration
@@ -2561,7 +2568,7 @@ class ARPESDatasetFitToolAccessor:
         fit_tool(self._obj, detached=detached)
 
     @property
-    def broadcast_dimensions(self) -> List[str]:
+    def broadcast_dimensions(self) -> list[str]:
         """Returns the dimensions which were used in the fitting process.
 
         This is a sibling property to `fit_dimensions`.
@@ -2574,7 +2581,7 @@ class ARPESDatasetFitToolAccessor:
         return list(self._obj.results.dims)
 
     @property
-    def fit_dimensions(self) -> List[str]:
+    def fit_dimensions(self) -> list[str]:
         """Returns the dimensions which were broadcasted across, as opposed to fit across.
 
         This is a sibling property to `broadcast_dimensions`.
@@ -2789,7 +2796,7 @@ class ARPESFitToolsAccessor:
         return self._obj.G.map(param_stderr_getter(param_name), otypes=[float])
 
     @property
-    def bands(self) -> Dict[str, MultifitBand]:
+    def bands(self) -> dict[str, MultifitBand]:
         """Collects bands after a multiband fit.
 
         Returns:
@@ -2802,7 +2809,7 @@ class ARPESFitToolsAccessor:
         return bands
 
     @property
-    def band_names(self) -> Set[str]:
+    def band_names(self) -> set[str]:
         """Collects the names of the bands from a multiband fit.
 
         Heuristically, a band is defined as a dispersive peak so we look for
@@ -2826,7 +2833,7 @@ class ARPESFitToolsAccessor:
         return collected_band_names
 
     @property
-    def parameter_names(self) -> Set[str]:
+    def parameter_names(self) -> set[str]:
         """Collects the parameter names for a multidimensional fit.
 
         Assumes that the model used is the same for all ``lmfit.ModelResult``s
@@ -2960,7 +2967,7 @@ class ARPESDatasetAccessor(ARPESAccessorBase):
         raise ValueError("No spectrum found in dataset.")
 
     @property
-    def spectra(self) -> List[xr.DataArray]:
+    def spectra(self) -> list[xr.DataArray]:
         """Collects the variables which are likely spectra.
 
         Returns:
@@ -2989,7 +2996,7 @@ class ARPESDatasetAccessor(ARPESAccessorBase):
             return "dataset"
 
     @property
-    def degrees_of_freedom(self) -> Set[str]:
+    def degrees_of_freedom(self) -> set[str]:
         """The collection of all degrees of freedom.
 
         Equivalently, dimensions on a piece of data.
@@ -3000,7 +3007,7 @@ class ARPESDatasetAccessor(ARPESAccessorBase):
         return set(self.spectrum.dims)
 
     @property
-    def spectrum_degrees_of_freedom(self) -> Set[str]:
+    def spectrum_degrees_of_freedom(self) -> set[str]:
         """Collects the spectrometer degrees of freedom.
 
         Spectrometer degrees of freedom are any which would be collected by an ARToF
@@ -3014,7 +3021,7 @@ class ARPESDatasetAccessor(ARPESAccessorBase):
         )
 
     @property
-    def scan_degrees_of_freedom(self) -> Set[str]:
+    def scan_degrees_of_freedom(self) -> set[str]:
         """Collects the scan degrees of freedom.
 
         Scan degrees of freedom are all of the degrees of freedom which are not recorded

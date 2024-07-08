@@ -1,7 +1,7 @@
 """Utilities for estimating quantities of interest when using a laser for photoemission."""
 
 import pint
-from arpes.settings import ureg
+from arpes.constants import ureg
 from typing import Optional
 
 __all__ = ("electrons_per_pulse", "electrons_per_pulse_mira")

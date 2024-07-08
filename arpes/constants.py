@@ -7,6 +7,9 @@ bundling necessary information on endstation classes.
 """
 
 from numpy import pi
+import pint
+
+ureg = pint.UnitRegistry()
 
 # eV, A reasonablish value if you aren't sure for the particular sample
 WORK_FUNCTION = 4.3
