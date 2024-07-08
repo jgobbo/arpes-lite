@@ -8,7 +8,8 @@ import numpy as np
 import xarray as xr
 from arpes.provenance import provenance, update_provenance
 from arpes.typing import DataType
-from arpes.utilities import normalize_to_spectrum
+from arpes.utilities import normalize_to_spectrum, lift_spectrum
+
 
 __all__ = (
     "curvature",
@@ -88,7 +89,8 @@ def gradient_modulus(data: DataType, delta=1):
     return data_copy
 
 
-def curvature(ds: xr.Dataset, directions=None, alpha=1, beta=None):
+@lift_spectrum
+def curvature(spectrum: xr.DataArray, directions=None, alpha=1, beta=None):
     r"""Provides "curvature" analysis for band locations.
 
     Defined via
@@ -131,8 +133,6 @@ def curvature(ds: xr.Dataset, directions=None, alpha=1, beta=None):
     Returns:
         The curvature of the intensity of the original data.
     """
-    spectrum: xr.DataArray = ds.S.spectrum if isinstance(ds, xr.Dataset) else ds
-
     if beta is not None:
         alpha = np.power(10.0, beta)
 
@@ -164,22 +164,8 @@ def curvature(ds: xr.Dataset, directions=None, alpha=1, beta=None):
         + (1 + cy * dfy_2) * cx * d2fx
     )
 
-    curv = xr.DataArray(
-        numerator / denom, spectrum.coords, spectrum.dims, attrs=spectrum.attrs
-    )
+    curv = xr.DataArray(numerator / denom, spectrum.coords, spectrum.dims)
 
-    if "id" in curv.attrs:
-        del curv.attrs["id"]
-        provenance(
-            curv,
-            spectrum,
-            {
-                "what": "Curvature",
-                "by": "curvature",
-                "directions": directions,
-                "alpha": alpha,
-            },
-        )
     return curv
 
 

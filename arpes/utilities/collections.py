@@ -1,9 +1,10 @@
 """Utilities for comparing collections and some specialty collection types."""
+
 from collections.abc import Mapping
 
 import numpy as np
 
-from typing import Any, Dict
+from typing import Any
 
 __all__ = (
     "deep_equals",
@@ -25,28 +26,36 @@ class MappableDict(dict):
     def __sub__(self, other):
         """Applies `-` onto values."""
         if set(self.keys()) != set(other.keys()):
-            raise ValueError("You can only subtract two MappableDicts with the same keys.")
+            raise ValueError(
+                "You can only subtract two MappableDicts with the same keys."
+            )
 
         return MappableDict({k: self.get(k) - other.get(k) for k in self.keys()})
 
     def __mul__(self, other):
         """Applies `*` onto values."""
         if set(self.keys()) != set(other.keys()):
-            raise ValueError("You can only multiply two MappableDicts with the same keys.")
+            raise ValueError(
+                "You can only multiply two MappableDicts with the same keys."
+            )
 
         return MappableDict({k: self.get(k) * other.get(k) for k in self.keys()})
 
     def __truediv__(self, other):
         """Applies `/` onto values."""
         if set(self.keys()) != set(other.keys()):
-            raise ValueError("You can only divide two MappableDicts with the same keys.")
+            raise ValueError(
+                "You can only divide two MappableDicts with the same keys."
+            )
 
         return MappableDict({k: self.get(k) / other.get(k) for k in self.keys()})
 
     def __floordiv__(self, other):
         """Applies `//` onto values."""
         if set(self.keys()) != set(other.keys()):
-            raise ValueError("You can only divide (//) two MappableDicts with the same keys.")
+            raise ValueError(
+                "You can only divide (//) two MappableDicts with the same keys."
+            )
 
         return MappableDict({k: self.get(k) // other.get(k) for k in self.keys()})
 
@@ -55,7 +64,7 @@ class MappableDict(dict):
         return MappableDict({k: -self.get(k) for k in self.keys()})
 
 
-def deep_update(destination: Any, source: Any) -> Dict[str, Any]:
+def deep_update(destination: Any, source: Any) -> dict[str, Any]:
     """Doesn't clobber keys further down trees like doing a shallow update would.
 
     Instead recurse down from the root and update as appropriate.
@@ -109,7 +118,7 @@ def deep_equals(a: Any, b: Any) -> bool:
         ),
     ):
         raise TypeError(
-            "Only dict, list, tuple, and set are supported by deep_equals, not {}".format(type(a))
+            f"Only dict, list, tuple, and set are supported by deep_equals, not {type(a)}"
         )
 
     if isinstance(a, set):

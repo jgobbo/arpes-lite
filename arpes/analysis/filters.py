@@ -6,8 +6,8 @@ import numpy as np
 from scipy import ndimage
 
 import xarray as xr
-from arpes.typing import DataType
 from arpes.provenance import provenance
+from arpes.utilities import lift_spectrum
 
 __all__ = (
     "gaussian_filter_arr",
@@ -17,8 +17,9 @@ __all__ = (
 )
 
 
+@lift_spectrum
 def gaussian_filter_arr(
-    data: DataType, sigma=None, n=1, default_size=1
+    spectrum: xr.DataArray, sigma=None, n=1, default_size=1
 ) -> xr.DataArray:
     """Coordinate aware `scipy.ndimage.filters.gaussian_filter`.
 
@@ -34,7 +35,6 @@ def gaussian_filter_arr(
     Returns:
         Smoothed data.
     """
-    spectrum: xr.DataArray = data.S.spectrum if isinstance(data, xr.Dataset) else data
 
     sigma = {} if sigma is None else sigma
     sigma = {

@@ -21,7 +21,7 @@ from arpes.plotting.utils import (
 )
 from arpes.provenance import save_plot_provenance
 from arpes.typing import DataType
-from arpes.utilities import normalize_to_spectrum
+from arpes.utilities import normalize_to_spectrum, lift_spectrum
 
 __all__ = (
     "stack_dispersion_plot",
@@ -145,9 +145,10 @@ def flat_stack_plot(
     return fig, ax
 
 
+@lift_spectrum
 def stack_dispersion_plot(
-    data: DataType, stack_axis: str = None, data_scaling: float = 2.0, **kwargs
-):
+    spectrum: xr.DataArray, stack_axis: str = None, data_scaling: float = 2.0, **kwargs
+) -> tuple[plt.Figure, plt.Axes]:
     """
     Generates a stack plot of a 2D dataset along the specified stack_axis.
     Each cut is normalized and scaled to fit within the average cut offset multiplied by data_scaling.
@@ -160,8 +161,6 @@ def stack_dispersion_plot(
     Returns:
         fig, ax: figure and axis of the plot
     """
-    spectrum: xr.DataArray = data.S.spectrum if isinstance(data, xr.Dataset) else data
-
     axes = list(spectrum.dims)
     if len(axes) != 2:
         raise ValueError(f"Spectrum must be 2D, but has dimensions {spectrum.dims}")

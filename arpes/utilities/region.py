@@ -1,7 +1,7 @@
 """Defines common region selections which are used elsewhere programmatically."""
+
 from enum import Enum
 
-from typing import Union
 
 __all__ = ["REGIONS", "normalize_region", "DesignatedRegions"]
 
@@ -42,7 +42,7 @@ REGIONS = {
 }
 
 
-def normalize_region(region: Union[str, dict]):
+def normalize_region(region: str | dict):
     """Converts named regions to an actual region."""
     if isinstance(region, str):
         return REGIONS[region]
@@ -51,5 +51,6 @@ def normalize_region(region: Union[str, dict]):
         return region
 
     raise TypeError(
-        "Region should be either a string (i.e. an ID/alias) " "or an explicit dictionary."
+        "Region should be either a string (i.e. an ID/alias) "
+        "or an explicit dictionary."
     )

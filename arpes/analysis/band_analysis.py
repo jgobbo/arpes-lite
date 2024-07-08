@@ -21,7 +21,7 @@ from arpes.fits import (
 )
 from arpes.provenance import update_provenance
 from arpes.typing import DataType
-from arpes.utilities import enumerate_dataarray, normalize_to_spectrum
+from arpes.utilities import enumerate_dataarray, normalize_to_spectrum, lift_spectrum
 from arpes.utilities.conversion.forward import convert_coordinates_to_kspace_forward
 from arpes.utilities.jupyter import wrap_tqdm
 
@@ -611,22 +611,29 @@ def fit_bands(
     return band_results, unpacked_bands, residual
 
 
+@lift_spectrum
 def extract_band_velocity(
-    dataset: DataType,
+    spectrum: xr.DataArray,
     slope_guess: float,
     intercept_guess: float,
     energy_window: float = 0.2,
     show: bool = False,
 ) -> float:
-    spectrum: xr.DataArray = (
-        dataset if isinstance(dataset, xr.DataArray) else dataset.S.spectrum
-    )
-
     def fit_guess(x: np.ndarray) -> np.ndarray:
         return slope_guess * x + intercept_guess
 
+    assert "eV" in spectrum.dims, "Spectrum must have an energy dimension."
+    non_eV_coords = [dim for dim in spectrum.dims if dim != "eV"]
+    assert len(non_eV_coords) == 1, "Spectrum must have exactly one momentum dimension."
+    momentum_coord = non_eV_coords[0]
+    assert momentum_coord in {
+        "kp",
+        "kx",
+        "ky",
+    }, "Non energy dimension must be momentum."
     masked_spectrum = spectrum.where(
-        np.abs(fit_guess(spectrum["kp"]) - spectrum["eV"]) < energy_window
+        np.abs(fit_guess(spectrum.coords[momentum_coord]) - spectrum.coords["eV"])
+        < energy_window
     )
 
     centers = []
@@ -634,7 +641,7 @@ def extract_band_velocity(
     errors = []
     for i, mdc in enumerate(masked_spectrum.transpose("eV", ...)):
         not_masked = ~np.isnan(mdc)
-        x: np.ndarray = mdc["kp"][not_masked]
+        x: np.ndarray = mdc[momentum_coord][not_masked]
         y: np.ndarray = mdc[not_masked]
         linear_result = LorentzianModel().fit(
             y,
@@ -662,7 +669,7 @@ def extract_band_velocity(
     if show:
         from matplotlib import pyplot as plt
 
-        axs: np.ndarray[plt.Axes]
+        axs: list[plt.Axes]
         _, axs = plt.subplots(1, 2)
         masked_spectrum.S.plot(ax=axs[0])
         linear_result.plot_fit(ax=axs[0])
