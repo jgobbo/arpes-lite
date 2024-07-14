@@ -429,12 +429,11 @@ def convert_to_kspace(
     # TODO be smarter about the resolution inference
     removed = [d for d in spectrum.dims if is_dimension_unconvertible(d)]
     old_dims = [d for d in spectrum.dims if not is_dimension_unconvertible(d)]
+    old_dims.sort()
 
     # Energy gets put at the front as a standardization
     if "eV" in removed:
         removed.remove("eV")
-
-    old_dims.sort()
 
     # temporarily reassign coordinates for dimensions we will not
     # convert to "index-like" dimensions

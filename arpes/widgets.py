@@ -28,7 +28,7 @@ import pathlib
 import itertools
 import warnings
 from functools import wraps
-from typing import Callable, List, Optional, Union
+from typing import Callable
 
 import matplotlib
 import matplotlib.gridspec as gridspec
@@ -581,7 +581,7 @@ def pca_explorer(
 @popout
 def kspace_tool(
     data,
-    overplot_bz: Optional[Union[Callable, List[Callable]]] = None,
+    overplot_bz: Callable | list[Callable] = None,
     bounds=None,
     resolution=None,
     coords=None,

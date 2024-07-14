@@ -10,7 +10,6 @@ different data formats into the PyARPES data model.
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 import xarray as xr
@@ -29,26 +28,31 @@ __all__ = (
 
 
 def load_data(
-    file: str | Path | int, location: Optional[str | type] = None, **kwargs
+    file: str | Path | int, location: str | type = None, **kwargs
 ) -> xr.Dataset:
-    """Loads a piece of data using available plugins. This the user facing API for data loading.
+    """Load a piece of data using available plugins.
 
-    Args:
-        file: An identifier for the file which should be loaded. If this is a number or can be coerced to one,
-          data will be loaded from the workspace data folder if a matching unique file can be found for the number.
-          If the value is a relative path, locations relative to the cwd and the workspace data folder will be checked.
-          Absolute paths can also be used in a pinch.
-        location: The name of the endstation/plugin to use. You should try to provide one. If None is provided,
-          the loader will try to find an appropriate one based on the file extension and brute force. This will be slower
-          and can be error prone in certain circumstances.
+    Args
+    ----
+    file : An identifier for the file which should be loaded. If this is a number or
+        can be coerced to one, data will be loaded from the workspace data folder if
+        a matching unique file can be found for the number. If the value is a
+        relative path, locations relative to the cwd and the workspace data folder
+        will be checked. Absolute paths can also be used in a pinch.
+    location : The name of the endstation/plugin to use. You should try to provide
+        one. If None is provided, the loader will try to find an appropriate one
+        based on the file extension and brute force. This will be slower and can be
+        error prone in certain circumstances.
 
-          Optionally, you can pass a loading plugin (the class) through this kwarg and directly specify
-          the class to be used.
+        Optionally, you can pass a loading plugin (the class) through this kwarg and
+        directly specify the class to be used.
 
 
-    Returns:
-        The loaded data. Ideally, data which is loaded through the plugin system should be highly compliant with
-        the PyARPES data model and should work seamlessly with PyARPES analysis code.
+    Returns
+    -------
+        The loaded data. Ideally, data which is loaded through the plugin system should
+        be highly compliant with the PyARPES data model and should work seamlessly with
+        PyARPES analysis code.
     """
     try:
         file = int(str(file))
@@ -64,8 +68,9 @@ def load_data(
         desc.pop("location")
         warnings.warn(
             (
-                "You should provide a location indicating the endstation or instrument used directly when "
-                "loading data without a dataset. We are going to do our best but no guarantees."
+                "You should provide a location indicating the endstation or instrument "
+                "used directly when loading data without a dataset. We are going to do "
+                "our best but no guarantees."
             )
         )
 
@@ -75,14 +80,20 @@ def load_data(
 def load_folder(
     folder: Path, location: str | type = None, pattern: str = "*", **kwargs
 ) -> list[xr.Dataset]:
-    """
-    Loads all files in a folder using the endstation plugin specified by location.
+    """Load all files in a folder.
 
-    Args:
-        folder: The folder to load all data from
-        location: The endstation plugin to use for loading the data
-        pattern: The pattern to use for globbing the files in the folder. Defaults to
-            all files
+    Args
+    ----
+    folder : Path
+        The folder to load all data from
+    location : str | type
+        The endstation plugin to use for loading the data
+    pattern : str, (default '*')
+        The pattern to use for globbing the files in the folder. Defaults to all files
+
+    Returns
+    -------
+        A list of all the datasets loaded from the specified folder
     """
 
     all_datasets = []
@@ -101,7 +112,7 @@ DATA_EXAMPLES = {
 
 
 def load_example_data(example_name="cut") -> xr.Dataset:
-    """Provides sample data for executable documentation."""
+    """Provide sample data for executable documentation."""
     if example_name not in DATA_EXAMPLES:
         warnings.warn(
             f"Could not find requested example_name: {example_name}. Please provide one of {list(DATA_EXAMPLES.keys())}"
@@ -115,23 +126,23 @@ def load_example_data(example_name="cut") -> xr.Dataset:
 @dataclass
 class ExampleData:
     @property
-    def cut(self) -> xr.DataArray:
+    def cut(self) -> xr.Dataset:
         return load_example_data("cut")
 
     @property
-    def map(self) -> xr.DataArray:
+    def map(self) -> xr.Dataset:
         return load_example_data("map")
 
     @property
-    def photon_energy(self) -> xr.DataArray:
+    def photon_energy(self) -> xr.Dataset:
         return load_example_data("photon_energy")
 
     @property
-    def nano_xps(self) -> xr.DataArray:
+    def nano_xps(self) -> xr.Dataset:
         return load_example_data("nano_xps")
 
     @property
-    def temperature_dependence(self) -> xr.DataArray:
+    def temperature_dependence(self) -> xr.Dataset:
         return load_example_data("temperature_dependence")
 
 
@@ -212,13 +223,18 @@ def stitch(
 
 def export_dataset(dataset: xr.Dataset, path: str | Path):
     """
-    Corrects bad keys/values and then exports dataset to netcdf.
+    Correct bad keys/values and then export dataset to netcdf.
+
     Note that all values that are not strings, ints, or floats are converted to strings.
 
-    Args:
-        dataset: The dataset to export
-        path: The path to export to
+    Args
+    ----
+        dataset : xr.Dataset
+            The dataset to export
+        path : str | Path
+            export path
     """
+    path = Path(path) if isinstance(path, str) else path
     dataset = dataset.copy(deep=True)
 
     fixed_values = {}

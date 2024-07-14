@@ -3,10 +3,16 @@
 Mostly these are used as common helper routines to the coordinate conversion code,
 which is responsible for actually outputing the desired bounds.
 """
+
 import numpy as np
 
-import arpes.constants
+from arpes.constants import K_INV_ANGSTROM
 from arpes.typing import DataType
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import xarray as xr
 
 __all__ = (
     "calculate_kp_kz_bounds",
@@ -79,10 +85,8 @@ def full_angles_to_k(
 
     we may substitute cos^2(zeta) for 1 - sin^2(zeta) which is 1 - (vrchi_x **2 + vrchi_y ** 2) above.
     """
-    k_par = arpes.constants.K_INV_ANGSTROM * np.sqrt(kinetic_energy)
-    k_perp = arpes.constants.K_INV_ANGSTROM * np.sqrt(
-        kinetic_energy * (1 - v_par_sq) + inner_potential
-    )
+    k_par = K_INV_ANGSTROM * np.sqrt(kinetic_energy)
+    k_perp = K_INV_ANGSTROM * np.sqrt(kinetic_energy * (1 - v_par_sq) + inner_potential)
 
     return k_par * vrchi_x, k_par * vrchi_y, k_perp * vrchi_z
 
@@ -90,31 +94,22 @@ def full_angles_to_k(
 def euler_to_kx(kinetic_energy, phi, beta, theta=0, slit_is_vertical=False):
     """Calculates kx from the phi/beta Euler angles given the experimental geometry."""
     if slit_is_vertical:
-        return (
-            arpes.constants.K_INV_ANGSTROM
-            * np.sqrt(kinetic_energy)
-            * np.sin(beta)
-            * np.cos(phi)
-        )
+        return K_INV_ANGSTROM * np.sqrt(kinetic_energy) * np.sin(beta) * np.cos(phi)
     else:
-        return (
-            arpes.constants.K_INV_ANGSTROM
-            * np.sqrt(kinetic_energy)
-            * np.sin(phi + theta)
-        )
+        return K_INV_ANGSTROM * np.sqrt(kinetic_energy) * np.sin(phi + theta)
 
 
 def euler_to_ky(kinetic_energy, phi, beta, theta=0, slit_is_vertical=False):
     """Calculates ky from the phi/beta Euler angles given the experimental geometry."""
     if slit_is_vertical:
         return (
-            arpes.constants.K_INV_ANGSTROM
+            K_INV_ANGSTROM
             * np.sqrt(kinetic_energy)
             * (np.cos(theta) * np.sin(phi) + np.cos(beta) * np.cos(phi) * np.sin(theta))
         )
     else:
         return (
-            arpes.constants.K_INV_ANGSTROM
+            K_INV_ANGSTROM
             * np.sqrt(kinetic_energy)
             * (np.cos(phi + theta) * np.sin(beta),)
         )
@@ -132,31 +127,19 @@ def euler_to_kz(
     else:
         beta_term = np.cos(phi + theta) * np.cos(beta)
 
-    return arpes.constants.K_INV_ANGSTROM * np.sqrt(
-        kinetic_energy * beta_term**2 + inner_potential
-    )
+    return K_INV_ANGSTROM * np.sqrt(kinetic_energy * beta_term**2 + inner_potential)
 
 
 def spherical_to_kx(
     kinetic_energy: np.ndarray, theta: np.float64, phi: np.ndarray
 ) -> np.ndarray:
     """Calculates kx from the sample spherical (emission, not measurement) coordinates."""
-    return (
-        arpes.constants.K_INV_ANGSTROM
-        * np.sqrt(kinetic_energy)
-        * np.sin(theta)
-        * np.cos(phi)
-    )
+    return K_INV_ANGSTROM * np.sqrt(kinetic_energy) * np.sin(theta) * np.cos(phi)
 
 
 def spherical_to_ky(kinetic_energy, theta, phi):
     """Calculates ky from the sample spherical (emission, not measurement) coordinates."""
-    return (
-        arpes.constants.K_INV_ANGSTROM
-        * np.sqrt(kinetic_energy)
-        * np.sin(theta)
-        * np.sin(phi)
-    )
+    return K_INV_ANGSTROM * np.sqrt(kinetic_energy) * np.sin(theta) * np.sin(phi)
 
 
 def spherical_to_kz(
@@ -175,9 +158,7 @@ def spherical_to_kz(
     Returns:
         The out of plane momentum, kz.
     """
-    return arpes.constants.K_INV_ANGSTROM * np.sqrt(
-        kinetic_energy * np.cos(theta) ** 2 + inner_V
-    )
+    return K_INV_ANGSTROM * np.sqrt(kinetic_energy * np.cos(theta) ** 2 + inner_V)
 
 
 def calculate_kp_kz_bounds(data: DataType):
@@ -212,92 +193,64 @@ def calculate_kp_kz_bounds(data: DataType):
     )
 
 
-def calculate_kp_bounds(data: DataType):
+def calculate_kp_bounds(data: DataType, phi_offset: float, perpendicular_offset: float):
     """Calculates kp bounds for a single ARPES cut."""
-    phi_coords = data.coords["phi"].values - data.S.phi_offset
-    beta = float(data.coords["beta"]) - data.S.beta_offset
-
-    phi_low, phi_high = np.min(phi_coords), np.max(phi_coords)
-    phi_mid = (phi_high + phi_low) / 2
-
-    sampled_phi_values = np.array([phi_low, phi_mid, phi_high])
-
-    kinetic_energy = data.coords["eV"].values.max()
-    kps = (
-        arpes.constants.K_INV_ANGSTROM
-        * np.sqrt(kinetic_energy)
-        * np.sin(sampled_phi_values)
-        * np.cos(beta)
+    phi_coords = data.coords["phi"].values - phi_offset
+    phi_bounds = np.min(phi_coords), np.max(phi_coords)
+    kinetic_energy_sqrt = np.sqrt(
+        data.S.hv - data.S.work_function + data.coords["eV"].values.max()
     )
 
-    return round(np.min(kps), 2), round(np.max(kps), 2)
+    kp_bounds: np.ndarray = (
+        K_INV_ANGSTROM
+        * kinetic_energy_sqrt
+        * np.cos(perpendicular_offset)
+        * np.sin(phi_bounds)
+    )
+
+    return kp_bounds.round(2)
 
 
-def calculate_kx_ky_bounds(data: DataType):
-    """Calculates the kx and ky range for a dataset with a fixed photon energy.
+def calculate_kx_ky_bounds(
+    data: DataType, phi_offset: float, scan_offset: float, scan_axis: str = "beta"
+):
+    """Calculate the kx and ky range for a dataset with a fixed photon energy.
 
     This is used to infer the gridding that should be used for a k-space conversion.
     Based on Jonathan Denlinger's old codes
 
-    Args:
-        arr: Dataset that includes a key indicating the photon energy of
-          the scan
+    Args
+    ----
+    data : DataType
+        Dataset that includes a key indicating the photon energy of the scan
 
-    Returns:
+    Returns
+    -------
         ((kx_low, kx_high,), (ky_low, ky_high,))
     """
-    phi_coords, beta_coords = (
-        data.coords["phi"] - data.S.phi_offset,
-        data.coords["beta"] - data.S.beta_offset,
+    kinetic_energy_sqrt = np.sqrt(
+        data.S.hv - data.S.work_function + data.coords["eV"].values.max()
     )
 
-    # Sample hopefully representatively along the edges
-    phi_low, phi_high = np.min(phi_coords), np.max(phi_coords)
-    beta_low, beta_high = np.min(beta_coords), np.max(beta_coords)
-    phi_mid = (phi_high + phi_low) / 2
-    beta_mid = (beta_high + beta_low) / 2
+    phi_coords: "xr.DataArray" = data.S.lookup_coord("phi") - phi_offset
+    scan_coords: "xr.DataArray" = data.S.lookup_coord(scan_axis) - scan_offset
+    phi_checkpoints = [phi_coords.min(), phi_coords.mean(), phi_coords.max()]
+    scan_checkpoints = [scan_coords.min(), scan_coords.mean(), scan_coords.max()]
 
-    sampled_phi_values = np.array(
-        [
-            phi_high,
-            phi_high,
-            phi_mid,
-            phi_low,
-            phi_low,
-            phi_low,
-            phi_mid,
-            phi_high,
-            phi_high,
-        ]
-    )
-    sampled_beta_values = np.array(
-        [
-            beta_mid,
-            beta_high,
-            beta_high,
-            beta_high,
-            beta_mid,
-            beta_low,
-            beta_low,
-            beta_low,
-            beta_mid,
-        ]
-    )
-    kinetic_energy = data.coords["eV"].values.max()
-
-    kxs = (
-        arpes.constants.K_INV_ANGSTROM
-        * np.sqrt(kinetic_energy)
-        * np.sin(sampled_phi_values)
-    )
-    kys = (
-        arpes.constants.K_INV_ANGSTROM
-        * np.sqrt(kinetic_energy)
-        * np.cos(sampled_phi_values)
-        * np.sin(sampled_beta_values)
-    )
-
-    return (
-        (round(np.min(kxs), 2), round(np.max(kxs), 2)),
-        (round(np.min(kys), 2), round(np.max(kys), 2)),
+    potential_kx_bounds = []
+    potential_ky_bounds = []
+    for phi_checkpoint in phi_checkpoints:
+        potential_kx_bounds.append(
+            np.sin(phi_checkpoint) * kinetic_energy_sqrt * K_INV_ANGSTROM
+        )
+        for scan_checkpoint in scan_checkpoints:
+            potential_ky_bounds.append(
+                np.sin(scan_checkpoint)
+                * np.cos(phi_checkpoint)
+                * kinetic_energy_sqrt
+                * K_INV_ANGSTROM
+            )
+    return (min(potential_kx_bounds), max(potential_kx_bounds)), (
+        min(potential_ky_bounds),
+        max(potential_ky_bounds),
     )

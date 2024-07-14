@@ -1,6 +1,5 @@
 """Automated utilities for calculating Fermi edge corrections."""
 
-from typing import Optional
 import lmfit as lf
 import matplotlib.pyplot as plt
 import numpy as np
@@ -253,7 +252,7 @@ def apply_photon_energy_fermi_edge_correction(
 
 
 def apply_quadratic_fermi_edge_correction(
-    arr: xr.DataArray, correction: Optional[lf.model.ModelResult] = None, offset=None
+    arr: xr.DataArray, correction: lf.model.ModelResult = None, offset=None
 ):
     """Applies a Fermi edge correction using a quadratic fit for the edge."""
     assert isinstance(arr, xr.DataArray)
@@ -314,28 +313,33 @@ def fit_fermi_edge(cut: xr.DataArray) -> xr.DataArray:
 def fix_fermi_edge(
     dataset: DataType,
     broadcast_fit: bool = True,
-    edge_fit: Optional[xr.DataArray] = None,
-    **kwargs,
+    edge_fit: xr.DataArray = None,
+    smoothing_sigma: float = 1.0,
 ) -> DataType:
-    """
-    Automatically corrects the Fermi edge in a dataset. If the measurement was done with
-    a curved slit, the Fermi edge will only be shifted to 0. If the measurement was done
-    with a straight slit, the Fermi edge will be shifted to 0 and the curved Fermi edge
-    will be corrected (`slit_shape` attr needs to be set to `straight`).
+    """Automatically correct the Fermi edge in a dataset.
 
-    Args:
-        ds: The dataset to correct
-        broadcast_fit: Whether to fit the Fermi edge of the summed spectrum and then
-            broadcast to all cuts or fit each cut individually.
-        edge_fit: A precomputed edge fit to use. Typically generated using
-            `fit_fermi_edge` on metal reference data.
+    If the measurement was done with a curved slit, the Fermi edge will only be shifted
+    to 0. If the measurement was done with a straight slit, the Fermi edge will be
+    shifted to 0 and the curved Fermi edge will be corrected (`slit_shape` attr needs to
+    be set to `straight`).
 
-    Kwargs:
-        smoothing_sigma: The sigma value for the Gaussian filter used to smooth the
-            integrated edc for fermi_edge detection. Increasing this can fix faulty
-            edge detection in noisy data.
+    Args
+    ----
+    dataset : DataType
+        The dataset to correct
+    broadcast_fit : bool
+        Whether to fit the Fermi edge of the summed spectrum and then broadcast to all
+        cuts or fit each cut individually.
+    edge_fit : DataArray
+        A precomputed edge fit to use. Typically generated using `fit_fermi_edge` on
+        metal reference data.
+    smoothing_sigma : float
+        The sigma value for the Gaussian filter used to smooth the integrated edc for
+        Fermi edge detection. Increasing this can fix faulty edge detection in noisy
+        data.
 
-    Returns:
+    Returns
+    -------
         A new dataset with the Fermi edge corrected.
     """
     HEMISPHERE_DIMS = {"eV", "phi"}
@@ -353,7 +357,7 @@ def fix_fermi_edge(
             original_spectrum.sum(
                 [dim for dim in original_spectrum.dims if dim != "eV"]
             ),
-            kwargs.get("smoothing_sigma", 1),
+            sigma=smoothing_sigma,
         )
         dropoff_index = np.argmin(np.diff(integrated_edc))
         dataset.coords["eV"] = (
