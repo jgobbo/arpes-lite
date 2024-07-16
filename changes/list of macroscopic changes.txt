@@ -7,6 +7,8 @@ Listed below are major changes which deprecate a significant amount of the codeb
     attrs only need to exist in one place.
 3. Configuration has been mostly gutted. Now it simply imports commonly used packages, adds common endstations, and establishes path roots for easier reference to data and figures.
 4. Trace has been removed since for me it only makes debugging harder.
+5. For kxky conversion, phi is now fixed as kx rather than depending on the slit orientation. This made it easier to determine offsets and kspace boundaries. 
+    I'm not sure what the full side-effects of this change are.
 
 
 Check the notes in this folder for details on the purpose of changes.

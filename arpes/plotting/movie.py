@@ -1,81 +1,87 @@
 """Utilities and an example of how to make an animated plot to export as a movie."""
 
+from pathlib import Path
+from warnings import warn
 import numpy as np
 from matplotlib import pyplot as plt
-from matplotlib import animation
+from matplotlib.animation import PillowWriter, FuncAnimation
 
-from arpes.settings import SETTINGS
 import xarray as xr
-from arpes.plotting.utils import path_for_plot
-from arpes.provenance import save_plot_provenance
+from arpes.utilities import lift_spectrum
 
 __all__ = ("plot_movie",)
 
 
-@save_plot_provenance
+@lift_spectrum
 def plot_movie(
-    data: xr.DataArray, time_dim, interval=None, fig=None, ax=None, out=None, **kwargs
+    spectrum: xr.DataArray,
+    time_dim: str,
+    framerate: int = 10,
+    ax=None,
+    save_path: Path | str | None = None,
+    **kwargs,
 ):
-    """Make an animated plot of a 3D dataset using one dimension as "time"."""
-    if not isinstance(data, xr.DataArray):
-        raise TypeError("You must provide a DataArray")
+    """Make an animated plot of a 3D dataset using one dimension as `time`.
+
+    Args
+    ----
+    spectrum : xr.DataArray
+        The 3D dataset to animate.
+    time_dim : str
+        The name of the dimension to animate over.
+    framerate : int (default, 10)
+        The number of frames per second.
+    ax : plt.Axes (default, None)
+        The axes to plot on. If None, a new figure is created.
+    save_path : Path | str | None (default, None)
+        The path to save the movie to. If None, the movie is not saved.
+
+    Returns
+    -------
+    animation : FuncAnimation
+        The animation object. If `save_path` is not None, the movie is saved to that
+        path.
+    """
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(7, 7))
+    else:
+        fig = ax.get_figure()
 
-    cmap = SETTINGS.get("interactive", {}).get("palette", "viridis")
-    vmax = data.max().item()
-    vmin = data.min().item()
+    vmax = spectrum.max().item()
+    vmin = spectrum.min().item()
 
-    if data.S.is_subtracted:
+    cmap = plt.rcParams["image.cmap"]
+    if spectrum.S.is_subtracted:
         cmap = "RdBu"
         vmax = np.max([np.abs(vmin), np.abs(vmax)])
         vmin = -vmax
-
-    if "vmax" in kwargs:
-        vmax = kwargs.pop("vmax")
-    if "vmin" in kwargs:
-        vmin = kwargs.pop("vmin")
-
-    plot = (
-        data.mean(time_dim).transpose().plot(vmax=vmax, vmin=vmin, cmap=cmap, **kwargs)
-    )
-
-    def init():
-        plot.set_array(np.asarray([]))
-        return (plot,)
-
-    animation_coords = data.coords[time_dim].values
+    vmax = kwargs.get("vmax", vmax)
+    vmin = kwargs.get("vmin", vmin)
 
     def animate(i):
-        coordinate = animation_coords[i]
-        data_for_plot = data.sel(**dict([[time_dim, coordinate]]))
-        plot.set_array(data_for_plot.values.G.ravel())
-        return (plot,)
+        ax.clear()
+        plot = spectrum.isel(**{time_dim: i}).plot(ax=ax, add_colorbar=False)
+        return plot
 
-    if interval:
-        computed_interval = interval
-    else:
-        computed_interval = 100
-
-    anim = animation.FuncAnimation(
+    animation = FuncAnimation(
         fig,
         animate,
-        init_func=init,
-        repeat=500,
-        frames=len(animation_coords),
-        interval=computed_interval,
-        blit=True,
+        frames=spectrum.sizes[time_dim],
+        interval=1000 / framerate,
+        **kwargs,
     )
 
-    Writer = animation.writers["ffmpeg"]
-    writer = Writer(
-        fps=1000 / computed_interval, metadata=dict(artist="Me"), bitrate=1800
-    )
+    if save_path is not None:
+        save_path = Path(save_path) if isinstance(save_path, str) else save_path
+        valid_extension = ".gif"
+        if save_path.suffix != valid_extension:
+            save_path = save_path.with_suffix(valid_extension)
+            warn(
+                f"save_path should have a {valid_extension} extension. Saving to {save_path} "
+                "instead."
+            )
+        writer = PillowWriter(fps=framerate)
+        animation.save(save_path, writer=writer)
 
-    if out is not None:
-        anim.save(path_for_plot(out), writer=writer)
-        return path_for_plot(out)
-
-    # plt.show()
-    return anim
+    return animation
