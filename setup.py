@@ -20,7 +20,7 @@ with open("./arpes/__init__.py") as fp:
 VERSION = about["VERSION"]
 DOCUMENTATION_URL = "https://arpes.readthedocs.io/"
 
-with open(ROOT / "requirements.txt") as f:
+with open(ROOT / "requirements_loose.txt") as f:
     requirements = f.read().splitlines()
 
 packages = find_packages(

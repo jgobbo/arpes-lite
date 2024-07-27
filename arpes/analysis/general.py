@@ -9,12 +9,10 @@ import arpes.constants
 import arpes.models.band
 import arpes.utilities
 import arpes.utilities.math
-import typing
 import xarray as xr
-from arpes.fits import GStepBModel, broadcast_model
 from arpes.provenance import update_provenance
 from arpes.typing import DataType
-from arpes.utilities import normalize_to_spectrum
+from arpes.utilities import normalize_to_spectrum, lift_spectrum
 from arpes.utilities.math import fermi_distribution
 
 from .filters import gaussian_filter_arr
@@ -26,33 +24,6 @@ __all__ = (
     "rebin",
     "fit_fermi_edge",
 )
-
-
-@update_provenance("Fit Fermi Edge")
-def fit_fermi_edge(data, energy_range=None):
-    """Fits a Fermi edge.
-
-    Not much easier than doing it manually, but this can be
-    useful sometimes inside procedures where you don't want to reimplement this logic.
-
-    Args:
-        data:
-        energy_range:
-
-    Returns:
-        The Fermi edge location.
-    """
-    if energy_range is None:
-        energy_range = slice(-0.1, 0.1)
-
-    broadcast_directions = list(data.dims)
-    broadcast_directions.remove("eV")
-    assert len(broadcast_directions) == 1  # for now we don't support more
-
-    edge_fit = broadcast_model(
-        GStepBModel, data.sel(eV=energy_range), broadcast_directions[0]
-    )
-    return edge_fit
 
 
 @update_provenance("Normalized by the 1/Fermi Dirac Distribution at sample temp")
@@ -172,8 +143,8 @@ def condense(data: xr.DataArray):
 @update_provenance("Rebinned array")
 def rebin(
     data: DataType,
-    shape: dict = None,
-    reduction: typing.Union[int, dict] = None,
+    shape: dict | None = None,
+    reduction: int | dict | None = None,
     interpolate=False,
     **kwargs
 ):
@@ -269,10 +240,7 @@ def rebin(
     return xr.DataArray(reduced_data, reduced_coords, data.dims, attrs=data.attrs)
 
 
-def normalize(data: DataType) -> xr.DataArray:
-    """
-    Normalize the data such that the minimum value is 0 and the maximum value is 1.
-    """
-    spectrum = data.S.spectrum if isinstance(data, xr.Dataset) else data
-    spectrum = spectrum.copy(deep=True)
+@lift_spectrum
+def normalize(spectrum: xr.DataArray) -> xr.DataArray:
+    """Normalize spectrum so its minimum value is 0 and maximum value is 1."""
     return (spectrum - spectrum.min()) / (spectrum.max() - spectrum.min())

@@ -344,7 +344,7 @@ class ARPESAccessorBase:
 
     def select_around_data(
         self,
-        points: dict[str, Any]|xr.Dataset,
+        points: dict[str, Any] | xr.Dataset,
         radius: dict[str, float] = None,
         fast: bool = False,
         safe: bool = True,
@@ -482,7 +482,7 @@ class ARPESAccessorBase:
 
     def select_around(
         self,
-        point: dict[str, Any]|xr.Dataset,
+        point: dict[str, Any] | xr.Dataset,
         radius: dict[str, float] = None,
         fast: bool = False,
         safe: bool = True,
@@ -1147,7 +1147,7 @@ class ARPESAccessorBase:
 
     def region_sel(self, *regions):
         def process_region_selector(
-            selector: slice| DesignatedRegions, dimension_name: str
+            selector: slice | DesignatedRegions, dimension_name: str
         ):
             if isinstance(selector, slice):
                 return selector
@@ -1604,7 +1604,7 @@ class ARPESAccessorBase:
         }
 
     @property
-    def temp(self) -> float| xr.DataArray:
+    def temp(self) -> float | xr.DataArray:
         """The temperature at which an experiment was performed."""
         prefered_attrs = [
             "TA",
@@ -1832,14 +1832,14 @@ class ARPESDataArrayAccessor(ARPESAccessorBase):
 
     def show_d2(self, **kwargs):
         """Opens the Bokeh based second derivative image tool."""
-        from arpes.plotting.all import CurvatureTool
+        from arpes.plotting.curvature_tool import CurvatureTool
 
         curve_tool = CurvatureTool(**kwargs)
         return curve_tool.make_tool(self._obj)
 
     def show_band_tool(self, **kwargs):
         """Opens the Bokeh based band placement tool."""
-        from arpes.plotting.all import BandTool
+        from arpes.plotting.band_tool import BandTool
 
         band_tool = BandTool(**kwargs)
         return band_tool.make_tool(self._obj)
@@ -2064,7 +2064,7 @@ class GenericAccessorTools:
         return self.transform_coords(dims, scale)
 
     def transform_coords(
-        self, dims: list[str], transform: np.ndarray| Callable
+        self, dims: list[str], transform: np.ndarray | Callable
     ) -> xr.DataArray:
         """Transforms the given coordinate values according to an arbitrary function.
 
@@ -2282,7 +2282,7 @@ class GenericAccessorTools:
 
     def transform(
         self,
-        axes: str| list[str],
+        axes: str | list[str],
         transform_fn: Callable,
         dtype: DTypeLike = None,
         *args,
@@ -2489,7 +2489,7 @@ class SelectionToolAccessor:
         self._obj = xarray_obj
 
     def max_in_window(
-        self, around: xr.DataArray, window: float| int, n_iters: int = 1
+        self, around: xr.DataArray, window: float | int, n_iters: int = 1
     ):
         # TODO: refactor into a transform and finish the transform refactor to allow
         # simultaneous iteration

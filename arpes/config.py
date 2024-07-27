@@ -12,8 +12,6 @@ from arpes.analysis.general import rebin, normalize
 from arpes.analysis.filters import gaussian_filter_arr
 from arpes import xarray_extensions
 
-# from arpes.xarray_extensions import *
-
 from arpes.endstations.base import add_endstation
 from arpes.endstations.plugins.MAESTRO import MAESTROMicroARPESEndstation
 

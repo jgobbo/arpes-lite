@@ -1,9 +1,10 @@
 """A help dialog showing keyboard shortcuts for Qt application."""
+
 # pylint: disable=import-error
 
 from PyQt5 import QtCore, QtWidgets
 
-from arpes.utilities.ui import PRETTY_KEYS, label, vertical
+from arpes.utilities.qt.ui import PRETTY_KEYS, label, vertical
 
 __all__ = ("BasicHelpDialog",)
 
@@ -24,7 +25,9 @@ class BasicHelpDialog(QtWidgets.QDialog):
         keyboard_shortcuts_layout = QtWidgets.QGridLayout()
         for i, shortcut in enumerate(shortcuts):
             keyboard_shortcuts_layout.addWidget(
-                label(", ".join(PRETTY_KEYS[k] for k in shortcut.chord), wordWrap=True), i, 0
+                label(", ".join(PRETTY_KEYS[k] for k in shortcut.chord), wordWrap=True),
+                i,
+                0,
             )
             keyboard_shortcuts_layout.addWidget(label(shortcut.label), i, 1)
 

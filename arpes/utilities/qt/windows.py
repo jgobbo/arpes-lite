@@ -6,7 +6,7 @@ from PyQt5 import QtGui, QtCore, QtWidgets
 
 from arpes.settings import SETTINGS
 from arpes.utilities.excepthook import patched_excepthook
-from arpes.utilities.ui import KeyBinding, Key
+from arpes.utilities.qt.ui import KeyBinding, Key
 
 __all__ = ("SimpleWindow",)
 

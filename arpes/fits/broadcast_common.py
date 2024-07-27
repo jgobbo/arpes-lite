@@ -1,5 +1,5 @@
 """Utilities used in broadcast fitting."""
-from typing import Dict, Union
+
 import lmfit
 import xarray as xr
 import operator
@@ -23,7 +23,7 @@ def unwrap_params(params, iter_coordinate):
     return {k: transform_or_walk(v) for k, v in params.items()}
 
 
-def apply_window(data: xr.DataArray, cut_coords: Dict[str, Union[float, slice]], window):
+def apply_window(data: xr.DataArray, cut_coords: dict[str, float | slice], window):
     """Cuts data inside a specified window.
 
     Because we allow passing an array of windows, we need to first try to find
@@ -107,7 +107,9 @@ def compile_model(model, params=None, prefixes=None):
     except TypeError:
         pass
 
-    if isinstance(model, (list, tuple)) and all([isinstance(token, type) for token in model]):
+    if isinstance(model, (list, tuple)) and all(
+        [isinstance(token, type) for token in model]
+    ):
         models = [
             m(prefix=prefix_compile.format(prefixes[i]), nan_policy="omit")
             for i, m in enumerate(model)

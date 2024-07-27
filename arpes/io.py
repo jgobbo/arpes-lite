@@ -11,6 +11,7 @@ import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import xarray as xr
 
@@ -27,9 +28,7 @@ __all__ = (
 )
 
 
-def load_data(
-    file: str | Path | int, location: str | type = None, **kwargs
-) -> xr.Dataset:
+def load_data(file: str | Path | int, location: str | type, **kwargs) -> xr.Dataset:
     """Load a piece of data using available plugins.
 
     Args
@@ -64,21 +63,11 @@ def load_data(
         "location": location,
     }
 
-    if location is None:
-        desc.pop("location")
-        warnings.warn(
-            (
-                "You should provide a location indicating the endstation or instrument "
-                "used directly when loading data without a dataset. We are going to do "
-                "our best but no guarantees."
-            )
-        )
-
     return load_scan(desc, **kwargs)
 
 
 def load_folder(
-    folder: Path, location: str | type = None, pattern: str = "*", **kwargs
+    folder: Path, location: str | type, pattern: str = "*", **kwargs
 ) -> list[xr.Dataset]:
     """Load all files in a folder.
 
@@ -98,8 +87,61 @@ def load_folder(
 
     all_datasets = []
     for file in folder.glob(pattern):
-        all_datasets.append(load_data(file, location=location, **kwargs))
+        all_datasets.append(load_data(file, location, **kwargs))
     return all_datasets
+
+
+def load_laue(path: Path | str):
+    """Load NorthStart Laue backscattering data."""
+    northstar_62_69_dtype = np.dtype(
+        [
+            ("pad1", "B", (2364,)),  # unused
+            ("sample", "S52"),
+            ("user", "S52"),
+            ("comment", "S512"),
+            ("pad2", "B", (228,)),  # unused
+        ]
+    )
+    """
+    Primitive support for loading Laue data from the NorthStar x-ray backscattering DAQ program.
+
+    Laue file structure courtesy Jonathan Denlinger, MERLIN endstations at the ALS
+    16-bit binary Laue histogram (.hs2) file
+    Format:  2 byte*256*256= 131072 long + header info at the end
+    Northstar 6.0:  132028 bytes   (956 byte extra)
+    Northstar 6.2.6.9:  134280 bytes  ( 3208 byte extra)
+    header includes (offset from start of header):
+    byte 65536 / 131072 / 2364   = sample name (character string - read to double space)
+    byte 65587 / 131124 / 2416  = operator (character string - read to double space)
+    byte 65638 / 131176 / 2468  = date in mm/dd/yy format (8 character string)
+    byte 65811 / 131760 / 2984  = dwell time * 10 in seconds (word)
+    byte 65821 / 131776 / 3000  = mA
+    byte 65823 / 131780 / 3004  = kV
+    byte 131664 / 592 = index file name
+    """
+    if isinstance(path, str):
+        path = Path(path)
+
+    binary_data = path.read_bytes()
+    table, header = binary_data[:131072], binary_data[131072:]
+
+    table = np.fromstring(table, dtype=np.uint16).reshape(256, 256)
+    header = np.fromstring(header, dtype=northstar_62_69_dtype).item()
+
+    arr = xr.DataArray(
+        table,
+        coords={"x": np.array(range(256)), "y": np.array(range(256))},
+        dims=[
+            "x",
+            "y",
+        ],
+        attrs={
+            "sample": header[1].split(b"\0")[0].decode("ascii"),
+            "user": header[2].split(b"\0")[0].decode("ascii"),
+            "comment": header[3].split(b"\0")[0].decode("ascii"),
+        },
+    )
+    return arr
 
 
 DATA_EXAMPLES = {

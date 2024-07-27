@@ -2,7 +2,7 @@
 
 import copy
 import functools
-from typing import List, Union, Container
+from typing import Container
 
 import numpy as np
 from scipy.ndimage import geometric_transform
@@ -11,7 +11,7 @@ import xarray as xr
 from arpes.provenance import provenance, update_provenance
 from arpes.typing import DataType
 from arpes.utilities import lift_dataarray_to_generic
-from arpes.utilities.normalize import normalize_to_spectrum
+from arpes.utilities.normalize_datatype import normalize_to_spectrum
 
 __all__ = (
     "flip_axis",

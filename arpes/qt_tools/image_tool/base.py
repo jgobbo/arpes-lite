@@ -7,7 +7,7 @@ from typing import override
 from collections import defaultdict
 
 
-from arpes.utilities.ui import (
+from arpes.utilities.qt.ui import (
     KeyBinding,
     Key,
     KeyboardModifier,

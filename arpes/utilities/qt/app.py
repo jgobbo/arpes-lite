@@ -10,7 +10,7 @@ import pyqtgraph as pg
 from PyQt5.QtWidgets import QApplication, QWidget
 from collections import defaultdict
 
-from arpes.utilities.ui import CursorRegion
+from arpes.utilities.qt.ui import CursorRegion
 from arpes.typing import DataType
 from arpes.settings import SETTINGS
 from .data_array_image_view import DataArrayImageView, DataArrayPlot

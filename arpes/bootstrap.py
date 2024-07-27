@@ -27,7 +27,7 @@ from arpes.analysis.sarpes import to_intensity_polarization
 from arpes.provenance import update_provenance
 from arpes.typing import DataType
 from arpes.utilities import lift_dataarray_to_generic
-from arpes.utilities.normalize import normalize_to_spectrum
+from arpes.utilities.normalize_datatype import normalize_to_spectrum
 from arpes.utilities.region import normalize_region
 
 __all__ = (
@@ -42,7 +42,9 @@ __all__ = (
 
 
 @update_provenance("Estimate prior")
-def estimate_prior_adjustment(data: DataType, region: Union[Dict[str, Any], str] = None) -> float:
+def estimate_prior_adjustment(
+    data: DataType, region: Union[Dict[str, Any], str] = None
+) -> float:
     r"""Estimates the parameters of a distribution generating the intensity histogram of pixels in a spectrum.
 
     In a perfectly linear, single-electron
@@ -244,7 +246,10 @@ def propagate_errors(f) -> Callable:
         vec_f = np.vectorize(f, excluded=exclude)
         res = vec_f(
             *[a.draw_samples() if isinstance(a, Distribution) else a for a in args],
-            **{k: v.draw_samples() if isinstance(v, Distribution) else v for k, v in kwargs.items()}
+            **{
+                k: v.draw_samples() if isinstance(v, Distribution) else v
+                for k, v in kwargs.items()
+            }
         )
 
         try:
@@ -324,11 +329,17 @@ def bootstrap(
             except KeyError:
                 return "Label-less DataArray"
 
-        print("Resampling args: {}".format(",".join([get_label(i) for i in resample_indices])))
+        print(
+            "Resampling args: {}".format(
+                ",".join([get_label(i) for i in resample_indices])
+            )
+        )
 
         # examine kwargs to determine which to resample
         resample_kwargs = [
-            k for k, v in kwargs.items() if isinstance(v, xr.DataArray) and k not in skip
+            k
+            for k, v in kwargs.items()
+            if isinstance(v, xr.DataArray) and k not in skip
         ]
         print("Resampling kwargs: {}".format(",".join(resample_kwargs)))
 
@@ -345,7 +356,9 @@ def bootstrap(
             for i in resample_indices:
                 new_args[i] = resample_fn(args[i], prior_adjustment=prior_adjustment)
             for k in resample_kwargs:
-                new_kwargs[k] = resample_fn(kwargs[k], prior_adjustment=prior_adjustment)
+                new_kwargs[k] = resample_fn(
+                    kwargs[k], prior_adjustment=prior_adjustment
+                )
 
             run = fn(*new_args, **new_kwargs)
             if isinstance(run, (xr.DataArray, xr.Dataset)):

@@ -147,18 +147,31 @@ def flat_stack_plot(
 
 @lift_spectrum
 def stack_dispersion_plot(
-    spectrum: xr.DataArray, stack_axis: str = None, data_scaling: float = 2.0, **kwargs
+    spectrum: xr.DataArray,
+    stack_axis: str = None,
+    data_scaling: float = 2.0,
+    max_stacks: int = 15,
+    ax: plt.Axes | None = None,
+    **kwargs,
 ) -> tuple[plt.Figure, plt.Axes]:
-    """
-    Generates a stack plot of a 2D dataset along the specified stack_axis.
-    Each cut is normalized and scaled to fit within the average cut offset multiplied by data_scaling.
+    """Generate a stack plot of a 2D spectrum along the specified `stack_axis`.
 
-    Args:
-        dataset: dataset to plot
-        stack_axis: axis to stack along (defaults to the zeroth axis if not specified)
-        data_scaling: scaling factor for the data
+    Each cut is scaled to fit within the average cut offset multiplied by
+    `data_scaling`. Cuts are offset so they intersect the y-axis near their cut value.
 
-    Returns:
+    Args
+    ----
+        spectrum : DataArray
+            dataset to plot
+        stack_axis : str
+            axis to stack along (defaults to the zeroth axis)
+        data_scaling : float
+            scaling factor for the data
+        max_stacks : int
+            maximum number of stacks to plot
+
+    Returns
+    -------
         fig, ax: figure and axis of the plot
     """
     axes = list(spectrum.dims)
@@ -174,7 +187,6 @@ def stack_dispersion_plot(
     plot_axis = axes[0]
 
     spectrum = spectrum.sortby(stack_axis)
-    max_stacks = kwargs.get("max_stacks", 15)
     if max_stacks < len(spectrum.coords[stack_axis]):
         stack_data = rebin(
             spectrum,
@@ -186,14 +198,14 @@ def stack_dispersion_plot(
     cut_values = stack_data.coords[stack_axis].values
     x = stack_data.coords[plot_axis].values
 
-    def normalize_to_max(y: np.ndarray, max: float):
+    def normalize_by_max(y: np.ndarray, max: float):
         return (y - y.min()) / max
 
     raw_ys: list[np.ndarray] = [
         y_values for y_values in stack_data.transpose(stack_axis, ...).values
     ]
     max_height = max([y.max() - y.min() for y in raw_ys])
-    normalized_ys = [normalize_to_max(y, max_height) for y in raw_ys]
+    normalized_ys = [normalize_by_max(y, max_height) for y in raw_ys]
 
     average_cut_offset = np.mean(np.diff(cut_values))
     average_y_intercept = np.mean([y[0] for y in normalized_ys])
@@ -204,12 +216,11 @@ def stack_dispersion_plot(
         ]
     )
 
-    ax: plt.Axes = kwargs.get("ax", None)
     if ax is None:
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
-    ax.plot(x, scaled_ys.transpose(), color=kwargs.get("color", "black"))
+    ax.plot(x, scaled_ys.transpose(), **kwargs)
 
     ax.set_xlim(x.min(), x.max())
     ax.set_xlabel(plot_axis)

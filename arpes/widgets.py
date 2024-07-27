@@ -12,8 +12,8 @@ something quick. As examples:
     angle-to-momentum conversion.
 4. `fit_initializer` allows for seeding an XPS curve fit.
 
-All of these return a "context" object which can be used to get information from the current
-session (i.e. the selected points or regions, or modified data).
+All of these return a "context" object which can be used to get information from the
+current session (i.e. the selected points or regions, or modified data).
 
 There are also primitives for building interactive tools in matplotlib. Such as
 DataArrayView, which provides an interactive and updatable plot view from an

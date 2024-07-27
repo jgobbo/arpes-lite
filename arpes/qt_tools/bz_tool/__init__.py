@@ -13,7 +13,7 @@ from arpes.utilities.conversion import convert_coordinates
 from arpes.utilities.bz_spec import SURFACE_ZONE_DEFINITIONS
 from arpes.utilities.image import imread_to_xarray
 from arpes.utilities.qt import SimpleWindow, BasicHelpDialog
-from arpes.utilities.ui import horizontal, tabs, combo_box
+from arpes.utilities.qt.ui import horizontal, tabs, combo_box
 from arpes.plotting.utils import imshow_arr
 import arpes.xarray_extensions
 

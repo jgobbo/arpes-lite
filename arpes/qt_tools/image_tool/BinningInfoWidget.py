@@ -2,7 +2,7 @@
 
 from PyQt5 import QtWidgets
 
-from arpes.utilities.ui import layout
+from arpes.utilities.qt.ui import layout
 
 from typing import TYPE_CHECKING
 

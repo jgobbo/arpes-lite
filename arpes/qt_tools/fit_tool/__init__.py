@@ -16,7 +16,14 @@ from typing import List, Optional, Union
 from arpes.utilities.qt.data_array_image_view import DataArrayPlot
 
 from arpes.fits.utilities import result_to_hints
-from arpes.utilities.ui import KeyBinding, CursorRegion, button, horizontal, label, tabs
+from arpes.utilities.qt.ui import (
+    KeyBinding,
+    CursorRegion,
+    button,
+    horizontal,
+    label,
+    tabs,
+)
 from arpes.utilities.qt import (
     qt_info,
     DataArrayImageView,

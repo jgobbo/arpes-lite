@@ -1,4 +1,5 @@
 """Scrollable interactive comparison between DataArrays."""
+
 import numpy as np
 import scipy.ndimage.interpolation
 
@@ -7,7 +8,7 @@ import xarray as xr
 from arpes.plotting.interactive_utils import BokehInteractiveTool
 from arpes.typing import DataType
 from arpes.utilities.funcutils import Debounce
-from arpes.utilities.normalize import normalize_to_spectrum
+from arpes.utilities.normalize_datatype import normalize_to_spectrum
 
 __all__ = ["compare"]
 

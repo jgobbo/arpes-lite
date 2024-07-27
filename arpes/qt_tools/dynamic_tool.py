@@ -1,4 +1,5 @@
 """Allows for making any function of a spectrum into a dynamic tool."""
+
 import inspect
 
 from PyQt5 import QtWidgets
@@ -7,7 +8,7 @@ from arpes.utilities import normalize_to_spectrum, group_by
 from arpes.typing import DataType
 
 from arpes.utilities.qt import qt_info, SimpleApp, SimpleWindow, BasicHelpDialog
-from arpes.utilities.ui import (
+from arpes.utilities.qt.ui import (
     CollectUI,
     tabs,
     horizontal,
@@ -47,8 +48,12 @@ class DynamicTool(SimpleApp):
         return self.main_layout
 
     def configure_image_widgets(self):
-        self.generate_marginal_for((), 0, 0, "xy", cursors=False, layout=self.content_layout)
-        self.generate_marginal_for((), 1, 0, "f(xy)", cursors=False, layout=self.content_layout)
+        self.generate_marginal_for(
+            (), 0, 0, "xy", cursors=False, layout=self.content_layout
+        )
+        self.generate_marginal_for(
+            (), 1, 0, "f(xy)", cursors=False, layout=self.content_layout
+        )
         self.main_layout.addLayout(self.content_layout, 0, 0)
 
     def update_data(self):
@@ -70,7 +75,10 @@ class DynamicTool(SimpleApp):
                     horizontal(
                         *[
                             vertical(
-                                *[vertical(label(s[0]), self.build_control_for(*s)) for s in pair]
+                                *[
+                                    vertical(label(s[0]), self.build_control_for(*s))
+                                    for s in pair
+                                ]
                             )
                             for pair in group_by(2, specification)
                         ]
@@ -86,7 +94,9 @@ class DynamicTool(SimpleApp):
             return updater
 
         for arg_name, arg_type, _ in specification:
-            ui[f"{arg_name}-control"].subject.subscribe(update_argument(arg_name, arg_type))
+            ui[f"{arg_name}-control"].subject.subscribe(
+                update_argument(arg_name, arg_type)
+            )
 
         controls.setFixedHeight(qt_info.inches_to_px(1.4))
         self.main_layout.addWidget(controls, 1, 0)

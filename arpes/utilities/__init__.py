@@ -6,7 +6,7 @@ from operator import itemgetter
 import xarray as xr
 
 from .funcutils import *
-from .normalize import *
+from .normalize_datatype import *
 from .xarray import *
 from .region import *
 from .dict import *
