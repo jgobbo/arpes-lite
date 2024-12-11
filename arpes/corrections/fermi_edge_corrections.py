@@ -371,6 +371,11 @@ def fix_fermi_edge(
     )
 
     scan_axes = [dim for dim in spectrum.dims if dim not in HEMISPHERE_DIMS]
+    # we need to stack something
+    if not scan_axes:
+        spectrum = spectrum.expand_dims("temp")
+        scan_axes = ["temp"]
+
     stacked = spectrum.stack(flattened=scan_axes)
     if edge_fit is None:
         edge_fit = (

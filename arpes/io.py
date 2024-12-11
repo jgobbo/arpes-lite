@@ -263,9 +263,8 @@ def stitch(
     return concatenated
 
 
-def export_dataset(dataset: xr.Dataset, path: str | Path):
-    """
-    Correct bad keys/values and then export dataset to netcdf.
+def export_dataset(dataset: xr.Dataset, path: str | Path) -> None:
+    """Correct bad keys/values then export dataset to netcdf.
 
     Note that all values that are not strings, ints, or floats are converted to strings.
 

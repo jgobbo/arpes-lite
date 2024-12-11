@@ -8,14 +8,14 @@ import xarray as xr
 import h5py
 
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any
 import copy
 import os.path
 
 import arpes.config
 from arpes.utilities.dict import case_insensitive_get
 from arpes.utilities.xarray import rename_dataset_keys
-from arpes.endstations.utilities.hdf5 import (
+from .utilities.hdf5 import (
     construct_coords,
     get_attrs,
     dataset_to_array,
@@ -124,7 +124,7 @@ class EndstationBase:
             return False
 
     @classmethod
-    def files_for_search(cls, directory) -> List[str]:
+    def files_for_search(cls, directory) -> list[str]:
         """Filters files in a directory for candidate scans.
 
         Here, this just means collecting the ones with extensions acceptable to the loader.
@@ -190,7 +190,7 @@ class EndstationBase:
 
         raise ValueError("Could not find file associated to {}".format(file))
 
-    def concatenate_frames(self, frames=List[xr.Dataset], scan_desc: dict = None):
+    def concatenate_frames(self, frames=list[xr.Dataset], scan_desc: dict = None):
         """Performs concatenation of frames in multi-frame scans.
 
         The way this happens is that we look for an axis on which the frames are changing uniformly
@@ -221,7 +221,7 @@ class EndstationBase:
         frames.sort(key=lambda x: x.coords[scan_coord])
         return xr.concat(frames, scan_coord)
 
-    def resolve_frame_locations(self, scan_desc: dict = None) -> List[str]:
+    def resolve_frame_locations(self, scan_desc: dict = None) -> list[str]:
         """Determine all files and frames associated to this piece of data.
 
         This always needs to be overridden in subclasses to handle data appropriately.
@@ -306,7 +306,7 @@ class EndstationBase:
 
         return data
 
-    def load_from_path(self, path: Union[str, Path]) -> xr.Dataset:
+    def load_from_path(self, path: str | Path) -> xr.Dataset:
         """Convenience wrapper around `.load` which references an explicit path."""
         path = str(path)
         return self.load(
@@ -536,7 +536,7 @@ def resolve_endstation(retry=True, **kwargs) -> EndstationBase:
         )
 
 
-def load_scan(scan_desc: Dict[str, str], retry=True, **kwargs: Any) -> xr.Dataset:
+def load_scan(scan_desc: dict[str, str], retry=True, **kwargs: Any) -> xr.Dataset:
     """Resolves a plugin and delegates loading a scan.
 
     This is used interally by `load_data` and should not be invoked directly

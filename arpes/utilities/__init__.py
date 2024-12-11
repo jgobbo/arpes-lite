@@ -12,6 +12,7 @@ from .region import *
 from .dict import *
 from .attrs import *
 from .collections import *
+from .string import *
 
 
 def enumerate_dataarray(arr: xr.DataArray):

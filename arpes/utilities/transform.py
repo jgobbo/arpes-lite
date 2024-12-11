@@ -1,62 +1,30 @@
-"""Note: this used to be a single function in xarray_extensions but was refactored out.
+"""Collection of functions to transform data."""
 
-TODO This was done to better support simultaneous traversal of collections, but is 
-still in process.
+from scipy.ndimage import rotate
+from arpes.utilities import lift_spectrum
 
-Transform has similar semantics to matrix multiplication, the dimensions of the
-output can grow or shrink depending on whether the transformation is size preserving,
-grows the data, shinks the data, or leaves in place.
+from typing import TYPE_CHECKING
 
-As an example, let us suppose we have a function which takes the mean and
-variance of the data:
+if TYPE_CHECKING:
+    from xarray import DataArray
 
-f: [dimension], coordinate_value -> [{'mean', 'variance'}]
 
-And a dataset with dimensions [X, Y]
+@lift_spectrum
+def rotate_spectrum(spectrum: "DataArray", angle: float) -> "DataArray":
+    """Rotate a 2D array by a given `angle`.
 
-Then calling
+    Uses scipys `rotate` function and combines the result with coordinates calculated
+    from the original array. It doesn't make sense to use this function
 
-data.G.transform('X', f)
+    Args
+    ----
+    spectrum : DataArray
+        The 2D array to rotate.
+    angle : float
+        The angle to rotate the array by in degrees.
+    """
 
-maps to a dataset with the same dimension X but where Y has been replaced by
-the length 2 label {'mean', 'variance'}. The full dimensions in this case are
-['X', {'mean', 'variance'}].
+    assert spectrum.ndim == 2, "Can only rotate 2D arrays"
 
-Please note that the transformed axes always remain in the data because they
-are iterated over and cannot therefore be modified.
-
-The transform function `transform_fn` must accept the coordinate of the
-marginal at the currently iterated point.
-
-if isinstance(self._obj, xr.Dataset):
-    raise TypeError(
-        "transform can only work on xr.DataArrays for now because of "
-        "how the type inference works"
-    )
-
-dest = None
-for coord, value in self.iterate_axis(axes):
-    new_value = transform_fn(value, coord, *args, **kwargs)
-
-    if dest is None:
-        new_value = transform_fn(value, coord, *args, **kwargs)
-
-        original_dims = [d for d in self._obj.dims if d not in value.dims]
-        original_shape = [self._obj.shape[self._obj.dims.index(d)] for d in original_dims]
-        original_coords = {k: v for k, v in self._obj.coords.items() if k not in value.dims}
-
-        full_shape = original_shape + list(new_value.shape)
-
-        new_coords = original_coords
-        new_coords.update({k: v for k, v in new_value.coords.items() if k not in original_coords})
-        new_dims = original_dims + list(new_value.dims)
-        dest = xr.DataArray(
-            np.zeros(full_shape, dtype=dtype or new_value.data.dtype),
-            coords=new_coords,
-            dims=new_dims,
-        )
-
-    dest.loc[coord] = new_value
-
-return dest
-"""
+    array = spectrum.values
+    rotated_array = rotate(array, angle, reshape=False)
