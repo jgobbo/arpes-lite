@@ -42,6 +42,7 @@ packages = find_packages(
 
 setup(
     name=NAME,
+    python_requires=">=3.12",
     version=VERSION,
     description=DESCRIPTION,
     long_description=LONG_DESCRIPTION,

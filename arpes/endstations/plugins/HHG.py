@@ -114,10 +114,7 @@ class HHGEndstation(HemisphericalEndstation):
     def load_single_frame(
         self, frame_path: str = None, scan_desc: dict = None, **kwargs
     ):
-
         data = read_single_pxt(frame_path)
-        if "eV" in data.coords:
-            data = data.assign_coords(eV=-data.coords["eV"].values)
         return xr.Dataset({"spectrum": data}, attrs=data.attrs)
 
     def concatenate_frames(

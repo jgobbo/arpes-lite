@@ -15,9 +15,8 @@ from arpes import xarray_extensions
 from arpes.endstations.base import add_endstation
 from arpes.endstations.plugins.MAESTRO import MAESTROMicroARPESEndstation
 from arpes.endstations.plugins.SPEEM import SPEEMEndstation
-from arpes.endstations.plugins.HHG import HHGEndstation
 
-for endstation in [MAESTROMicroARPESEndstation, SPEEMEndstation, HHGEndstation]:
+for endstation in [MAESTROMicroARPESEndstation, SPEEMEndstation]:
     add_endstation(endstation)
 xr.set_options(keep_attrs=True)
 plt.rcParams["image.cmap"] = "magma"
