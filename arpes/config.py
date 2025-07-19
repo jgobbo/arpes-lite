@@ -13,10 +13,13 @@ from arpes.analysis.filters import gaussian_filter_arr
 from arpes import xarray_extensions
 
 from arpes.endstations.base import add_endstation
-from arpes.endstations.plugins.MAESTRO import MAESTROMicroARPESEndstation
-from arpes.endstations.plugins.SPEEM import SPEEMEndstation
+from arpes.endstations.plugins import (
+    MAESTROMicroARPESEndstation,
+    SPEEMEndstation,
+    ALGMainChamber,
+)
 
-for endstation in [MAESTROMicroARPESEndstation, SPEEMEndstation]:
+for endstation in [MAESTROMicroARPESEndstation, SPEEMEndstation, ALGMainChamber]:
     add_endstation(endstation)
 xr.set_options(keep_attrs=True)
 plt.rcParams["image.cmap"] = "magma"
