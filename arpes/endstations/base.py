@@ -305,7 +305,8 @@ class EndstationBase:
         # this is done for performance reasons in momentum space conversion, primarily
         for data_var in data.data_vars.values():
             if not data_var.dtype.isnative:
-                data_var.values = data_var.values.byteswap().newbyteorder()
+                array = data_var.values
+                data_var.values = array.view(array.dtype.newbyteorder("="))
 
         return data
 
