@@ -48,6 +48,7 @@ class ALGMainChamber(HemisphericalEndstation, FITSEndstation):
         "SFFR_0": "frames_per_slice",
         "SFBA_0": "phi_prebinning",
         "SFBE0": "eV_prebinning",
+        "null": "cycle",
     }
 
     MERGE_ATTRS = {
