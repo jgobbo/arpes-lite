@@ -1,5 +1,6 @@
 """Automated utilities for calculating Fermi edge corrections."""
 
+from typing import TYPE_CHECKING
 import lmfit as lf
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,6 +17,9 @@ from arpes.fits import (
 )
 from arpes.provenance import provenance, update_provenance
 from arpes.utilities.math import shift_by
+
+if TYPE_CHECKING:
+    from lmfit.model import ModelResult
 
 
 def _exclude_from_set(excluded):
@@ -306,8 +310,12 @@ def fit_fermi_edge(cut: xr.DataArray) -> xr.DataArray:
     edge_region = cut.sel(eV=slice(-0.1, 0.1))
 
     edge_fits = broadcast_model(AffineBroadenedFD, edge_region, "phi", progress=False)
-    quad_fit = QuadraticModel().guess_fit(edge_fits.F.p("fd_center"))
-    return quad_fit.eval(x=edge_region["phi"])
+    quad_fit: ModelResult = QuadraticModel().guess_fit(edge_fits.F.p("fd_center"))
+    return xr.DataArray(
+        quad_fit.eval(x=edge_region["phi"]),
+        dims="phi",
+        coords={"phi": edge_region["phi"]},
+    )
 
 
 def fix_fermi_edge(

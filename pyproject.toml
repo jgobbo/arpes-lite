@@ -1,6 +1,6 @@
 [project]
 name = "arpes-lite"
-version = "1.0.0"
+version = "1.0.1"
 description = "Modular data analysis code for angle resolved photoemission spectroscopy (ARPES)"
 readme = "README.md"
 keywords = ["python", "arpes", "data analysis"]
@@ -31,6 +31,7 @@ dependencies = [
     "pyqt5>=5.15.11",
     "pyqtgraph>=0.13.7",
     "rx>=3.2.0",
+    "scikit-image>=0.25.2",
     "titlecase>=2.4.1",
     "tqdm>=4.67.1",
     "xarray>=2025.7.1",
