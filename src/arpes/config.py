@@ -17,9 +17,15 @@ from arpes.endstations.plugins import (
     MAESTROMicroARPESEndstation,
     SPEEMEndstation,
     ALGMainChamber,
+    HHGEndstation,
 )
 
-for endstation in [MAESTROMicroARPESEndstation, SPEEMEndstation, ALGMainChamber]:
+for endstation in [
+    MAESTROMicroARPESEndstation,
+    SPEEMEndstation,
+    ALGMainChamber,
+    HHGEndstation,
+]:
     add_endstation(endstation)
 xr.set_options(keep_attrs=True)
 plt.rcParams["image.cmap"] = "magma"
