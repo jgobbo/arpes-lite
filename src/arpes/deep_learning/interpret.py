@@ -3,6 +3,7 @@
 This borrows ideas heavily from fastai which provides interpreter classes
 for different kinds of models.
 """
+
 from dataclasses import dataclass, field
 import math
 
@@ -67,7 +68,9 @@ class InterpretationItem:
             input_formatter.show(x, ax)
 
         ax.set_title(
-            "Item {index}; loss={loss:.3f}\n".format(index=self.index, loss=float(self.loss))
+            "Item {index}; loss={loss:.3f}\n".format(
+                index=self.index, loss=float(self.loss)
+            )
         )
 
         if target_formatter is not None:
@@ -81,7 +84,9 @@ class InterpretationItem:
                 target_formatter.context = dict(is_ground_truth=False)
 
             predicted = (
-                self.decodes_target(self.predicted_target) if pullback else self.predicted_target
+                self.decodes_target(self.predicted_target)
+                if pullback
+                else self.predicted_target
             )
             target_formatter.show(predicted, ax)
 
@@ -150,18 +155,18 @@ class Interpretation:
             if isinstance(n_items, (tuple, list)):
                 layout = n_items
             else:
-                n_rows = int(math.ceil(n_items ** 0.5))
+                n_rows = int(math.ceil(n_items**0.5))
                 layout = (n_rows, n_rows)
 
             items = self.top_losses()[:n_items]
         else:
             n_items = len(items)
-            n_rows = int(math.ceil(n_items ** 0.5))
+            n_rows = int(math.ceil(n_items**0.5))
             layout = (n_rows, n_rows)
 
         _, axes = plt.subplots(*layout, figsize=(layout[0] * 3, layout[1] * 4))
 
-        items_with_nones = list(items) + [None] * (np.product(layout) - n_items)
+        items_with_nones = list(items) + [None] * (np.prod(layout) - n_items)
         for item, ax in zip(items_with_nones, axes.ravel()):
             if item is None:
                 ax.axis("off")
@@ -175,7 +180,9 @@ class Interpretation:
         """Builds an interpreter from an instance of a `pytorch_lightning.Trainer`."""
         return cls(trainer.model, trainer.train_dataloader, trainer.val_dataloaders)
 
-    def dataloader_to_item_list(self, dataloader: DataLoader) -> List[InterpretationItem]:
+    def dataloader_to_item_list(
+        self, dataloader: DataLoader
+    ) -> List[InterpretationItem]:
         """Converts a data loader into a list of interpretation items corresponding to the data samples."""
         items = []
 
@@ -186,9 +193,13 @@ class Interpretation:
                 y_hats = torch.unbind(y_hat, axis=0)
                 ys = torch.unbind(y, axis=0)
 
-                losses = [self.model.criterion(yi_hat, yi) for yi_hat, yi in zip(y_hats, ys)]
+                losses = [
+                    self.model.criterion(yi_hat, yi) for yi_hat, yi in zip(y_hats, ys)
+                ]
 
-            for (yi, yi_hat, loss, index) in zip(ys, y_hats, losses, torch.unbind(indices, axis=0)):
+            for yi, yi_hat, loss, index in zip(
+                ys, y_hats, losses, torch.unbind(indices, axis=0)
+            ):
                 items.append(
                     InterpretationItem(
                         torch.squeeze(yi),
@@ -207,4 +218,6 @@ class Interpretation:
         This is done by iterating through the dataloaders and pushing data through the models.
         """
         self.train_items = self.dataloader_to_item_list(self.train_dataloader)
-        self.val_item_lists = [self.dataloader_to_item_list(dl) for dl in self.val_dataloaders]
+        self.val_item_lists = [
+            self.dataloader_to_item_list(dl) for dl in self.val_dataloaders
+        ]

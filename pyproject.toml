@@ -1,0 +1,56 @@
+[project]
+name = "arpes-lite"
+version = "1.0.0"
+description = "Modular data analysis code for angle resolved photoemission spectroscopy (ARPES)"
+readme = "README.md"
+keywords = ["python", "arpes", "data analysis"]
+license = "GPL-3.0-only"
+license-files = ["LICENSE", "AUTHORS.md"]
+authors = [
+    { name = "Conrad Stansbury", email = "chstan@berkeley.edu"},
+    { name = "Jacob Gobbo", email = "gobbo.jacob@gmail.com" }
+]
+maintainers = [
+    { name = "Jacob Gobbo", email = "gobbo.jacob@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "ase>=3.26.0",
+    "astropy>=7.1.0",
+    "bokeh>=3.7.3",
+    "colorcet>=3.1.0",
+    "dill>=0.4.0",
+    "h5py>=3.14.0",
+    "imageio>=2.37.0",
+    "lmfit>=1.3.4",
+    "matplotlib>=3.10.5",
+    "numba>=0.61.2",
+    "numpy>=2.2.6",
+    "pint>=0.24.4",
+    "pygor>=1.0.1",
+    "pyqt5>=5.15.11",
+    "pyqtgraph>=0.13.7",
+    "rx>=3.2.0",
+    "titlecase>=2.4.1",
+    "tqdm>=4.67.1",
+    "xarray>=2025.7.1",
+]
+
+[project.urls]
+Repository = "https://github.com/jgobbo/arpes-lite"
+Documentation = "https://arpes.readthedocs.io/"
+
+[tool.uv]
+constraint-dependencies = ["pyqt5-qt5 <=5.15.2; sys_platform == 'win32'", "llvmlite>=0.37.0"]
+
+[tool.uv.build-backend]
+module-name = "arpes"
+
+[build-system]
+requires = ["uv_build>=0.8.9,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.30.1",
+]

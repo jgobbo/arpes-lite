@@ -42,7 +42,7 @@ class Product(ExperimentTreeItem):
         self._iter = None
 
     def __len__(self):
-        return np.product([len(item) for item in self.items])
+        return np.prod([len(item) for item in self.items])
 
     def __iter__(self):
         def safeiter(item_or_iterable: Union[Any, Iterable[Any]]) -> Iterator[Any]:
@@ -59,7 +59,9 @@ class Product(ExperimentTreeItem):
 
     def __repr__(self):
         front = "<Product>"
-        content = "\n[\n{}\n]\n".format((", \n".join(["\t" + repr(f) for f in self.items])))
+        content = "\n[\n{}\n]\n".format(
+            (", \n".join(["\t" + repr(f) for f in self.items]))
+        )
 
         back = "</ Product>"
 
@@ -72,7 +74,9 @@ class Collect(ExperimentTreeItem):
         self.configuration = configuration
 
     def __repr__(self):
-        return "<Collect duration={} configuration={} />".format(self.duration, self.configuration)
+        return "<Collect duration={} configuration={} />".format(
+            self.duration, self.configuration
+        )
 
 
 class Move(ExperimentTreeItem):
@@ -82,7 +86,11 @@ class Move(ExperimentTreeItem):
     backlash_compensate = False
 
     def __init__(
-        self, wait_after=0, measure_while_moving=False, backlash_compensate=False, **kwargs
+        self,
+        wait_after=0,
+        measure_while_moving=False,
+        backlash_compensate=False,
+        **kwargs,
     ):
         self.moveset = kwargs
         self.wait_after = wait_after
@@ -152,7 +160,9 @@ class Linspace(ExperimentTreeItem):
         front = "<Linspace {} --> {}, {} steps endpoint={}>".format(
             self.start, self.stop, self.num, self.endpoint
         )
-        content = "\n[\n{}\n]\n".format((", \n".join(["\t" + repr(f) for f in self.values])))
+        content = "\n[\n{}\n]\n".format(
+            (", \n".join(["\t" + repr(f) for f in self.values]))
+        )
         back = "</ Linspace>"
         return front + content + back
 
@@ -288,7 +298,9 @@ class JSONExperimentDriver(ExperimentDriver):
 
     def dumps(self, o, desired_total_time=None):
         """Dumps the experiment sequence and performs a flattening pass."""
-        initial_pass = json.dumps({"sequence": o, "configuration": {}}, cls=FlatExperimentEncoder)
+        initial_pass = json.dumps(
+            {"sequence": o, "configuration": {}}, cls=FlatExperimentEncoder
+        )
 
         # we do an extra flattening pass here
         dict_values = json.loads(initial_pass)
