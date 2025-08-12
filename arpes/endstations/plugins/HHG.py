@@ -147,7 +147,9 @@ class HHGEndstation(HemisphericalEndstation):
             frame_positions = np.loadtxt(motors_path, delimiter="\t", skiprows=1)
 
             for frame, frame_position in zip(frames, frame_positions):
-                for motor_name, motor_position in zip(motor_names, frame_position):
+                for motor_name, motor_position in zip(
+                    motor_names, np.atleast_1d(frame_position)
+                ):
                     frame.coords[motor_name] = motor_position
 
             def combine_datasets(ds_list, shape: list, dim_names: list):

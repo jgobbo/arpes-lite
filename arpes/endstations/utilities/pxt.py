@@ -7,7 +7,7 @@ import xarray as xr
 
 from arpes.utilities import rename_keys, safe_decode
 
-from igor import igorpy
+from pygor import load, Wave
 
 
 __all__ = ("read_single_pxt",)
@@ -46,7 +46,7 @@ def read_header(header_bytes: bytes):
     )
 
 
-def wave_to_xarray(wave: igorpy.Wave) -> xr.DataArray:
+def wave_to_xarray(wave: Wave) -> xr.DataArray:
     """Convert a wave to an `xr.DataArray`.
 
     Units, if present on the wave, are used to furnish the dimension names. If dimension
@@ -97,13 +97,13 @@ def read_single_pxt(
     loaded = None
     for try_byte_order in [">", "=", "<"]:
         try:
-            loaded = igorpy.load(reference_path, initial_byte_order=try_byte_order)
+            loaded = load(reference_path, initial_byte_order=try_byte_order)
             break
         except Exception:  # pylint: disable=broad-except
             # bad byte ordering probably
             pass
 
-    children = [c for c in loaded.children if isinstance(c, igorpy.Wave)]
+    children = [c for c in loaded.children if isinstance(c, Wave)]
 
     if len(children) == 1:
         return wave_to_xarray(children[0])
