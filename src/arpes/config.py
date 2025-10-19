@@ -13,17 +13,13 @@ from arpes.analysis.filters import gaussian_filter_arr
 from arpes import xarray_extensions
 
 from arpes.endstations.base import add_endstation
-from arpes.endstations.plugins import (
-    MAESTROMicroARPESEndstation,
-    SPEEMEndstation,
-    ALGMainChamber,
-    HHGEndstation,
-)
+from arpes.endstations.plugins import *
 
 for endstation in [
     MAESTROMicroARPESEndstation,
     SPEEMEndstation,
     ALGMainChamber,
+    ALGMainChamberFITS,
     HHGEndstation,
 ]:
     add_endstation(endstation)

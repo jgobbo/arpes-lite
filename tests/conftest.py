@@ -1,4 +1,5 @@
 """Mocks the analysis environment and provides data fixutres for tests."""
+
 from dataclasses import dataclass
 import os
 from typing import Callable
@@ -60,7 +61,6 @@ def sandbox_configuration():
             os.path.join(*pieces), location=SCAN_FIXTURE_LOCATIONS[path]
         )
 
-    arpes.config.update_configuration(user_path=resources_dir)
     sandbox = Sandbox(
         with_workspace=set_workspace,
         load=load,

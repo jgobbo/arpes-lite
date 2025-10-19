@@ -1,14 +1,17 @@
 """Provides data loading for the Lanzara group SPEEM."""
 
 import copy
+from pathlib import Path
 
 import pickle
 import numpy as np
 from scipy.interpolate import griddata
+from matplotlib import pyplot as plt
 
 import xarray as xr
 from arpes.endstations import EndstationBase
 from arpes.provenance import provenance_from_file
+from arpes.constants import K_INV_ANGSTROM
 
 __all__ = "SPEEMEndstation"
 
@@ -56,8 +59,22 @@ class SPEEMEndstation(EndstationBase):
     ALIASES = ["SPEEM", "ToF", "PEEM-ToF"]
     _TOLERATED_EXTENSIONS = {".pickle"}
 
+    @staticmethod
+    def load_nc(filepath: Path, prune: bool = True):
+        raw_data = xr.load_dataarray(filepath)
+        if prune:
+            raw_data = SPEEMEndstation.prune_counts(raw_data)
+
+        return raw_data
+
+    @staticmethod
+    def prune_counts(count_list: np.ndarray) -> np.ndarray:
+        t_min = float(count_list.min(axis=0)[2])
+        return count_list[count_list[:, 2] != t_min]
+
+    @staticmethod
     def coordinate_conversion(
-        self, count_list: np.ndarray, conversion_table: np.ndarray
+        count_list: np.ndarray, conversion_table: np.ndarray, method: str = "cubic"
     ) -> np.ndarray:
         """
         Converts x, y, t detector coordinates to photoemission angle/position and
@@ -66,23 +83,53 @@ class SPEEMEndstation(EndstationBase):
         radius = np.hypot(count_list[:, 0], count_list[:, 1])
         theta = np.arctan2(count_list[:, 1], count_list[:, 0])
 
-        method = "cubic"
+        rt_count_list = np.column_stack((radius, count_list[:, 2]))
+        r_data, t_data, ke_data, ang_data = conversion_table.transpose()
+
+        radial_angle = griddata(
+            np.column_stack((r_data, t_data)), ang_data, rt_count_list, method=method
+        )
         kinetic_energy = griddata(
-            conversion_table[:, 0:2],
-            conversion_table[:, 2],
-            count_list[:, 2],
+            np.column_stack((r_data, t_data)),
+            ke_data,
+            rt_count_list,
             method=method,
         )
-        radial_angle = griddata(
-            conversion_table[:, 0:2], conversion_table[:, 3], radius, method=method
-        )
 
-        phi = np.multiply(radial_angle, np.cos(theta))
-        psi = np.multiply(radial_angle, np.sin(theta))
+        kp = K_INV_ANGSTROM * np.sqrt(kinetic_energy) * np.sin(np.deg2rad(radial_angle))
+        kx = kp * np.cos(theta)
+        ky = kp * np.sin(theta)
 
-        return np.stack((phi, psi, kinetic_energy), axis=1)
+        converted_counts = np.column_stack((kx, ky, kinetic_energy))
+        return converted_counts[np.where(~np.any(np.isnan(converted_counts), axis=1))]
 
-    def load(self, scan_desc: dict, conversion_table: np.ndarray, **kwargs):
+    # def coordinate_conversion(
+    #     self, count_list: np.ndarray, conversion_table: np.ndarray
+    # ) -> np.ndarray:
+    #     """
+    #     Converts x, y, t detector coordinates to photoemission angle/position and
+    #     energy.
+    #     """
+    #     radius = np.hypot(count_list[:, 0], count_list[:, 1])
+    #     theta = np.arctan2(count_list[:, 1], count_list[:, 0])
+
+    #     method = "cubic"
+    #     kinetic_energy = griddata(
+    #         conversion_table[:, 0:2],
+    #         conversion_table[:, 2],
+    #         count_list[:, 2],
+    #         method=method,
+    #     )
+    #     radial_angle = griddata(
+    #         conversion_table[:, 0:2], conversion_table[:, 3], radius, method=method
+    #     )
+
+    #     phi = np.multiply(radial_angle, np.cos(theta))
+    #     psi = np.multiply(radial_angle, np.sin(theta))
+
+    #     return np.stack((phi, psi, kinetic_energy), axis=1)
+
+    def load(self, scan_desc: dict, conversion_table: np.ndarray = None, **kwargs):
         """
         Loads a pickle file from the SPEEM DAQ.
 
@@ -160,10 +207,27 @@ class SPEEMEndstation(EndstationBase):
         return xr.Dataset(dataset_contents, attrs=metadata)
 
     @staticmethod
-    def prune_data(data: np.ndarray):
-        pruned = []
-        for count in data:
-            if 4095 not in count and 0 not in count:
-                pruned.append(count)
+    def plot_conversion_table_contours(conversion_table: np.ndarray):
+        ke = conversion_table[:, 2]
+        n_angs = int(np.argmax(np.diff(ke) != 0)) + 1
+        n_kes = conversion_table.shape[0] // n_angs
 
-        return np.array(pruned)
+        assert n_angs * n_kes == conversion_table.shape[0]
+
+        ke_contours = [
+            conversion_table[n_kes * i : n_kes * (i + 1), 0:2] for i in range(n_angs)
+        ]
+        ang_contours = [conversion_table[i::n_angs, 0:2] for i in range(n_kes)]
+
+        ax: plt.Axes
+        fig, ax = plt.subplots(1, 1, figsize=(7, 7))
+
+        for ke_contour in ke_contours:
+            ax.plot(ke_contour[:, 0], ke_contour[:, 1], "k")
+        for ang_contour in ang_contours:
+            ax.plot(ang_contour[:, 0], ang_contour[:, 1], "k")
+        ax.set_title("conversion table contours")
+        ax.set_xlabel("r")
+        ax.set_ylabel("tof")
+
+        return fig, ax
